@@ -311,3 +311,79 @@ export const logoutUser = async (req, res) => {
     });
   }
 };
+
+export const deactivateAccount = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User account not found.",
+      });
+    }
+
+    if (!user.isActive) {
+      return res.status(400).json({
+        success: false,
+        message: "Account is already deactivated.",
+      });
+    }
+
+    user.isActive = false;
+    user.tokenVersion += 1;
+
+    await user.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Account deactivated.",
+    });
+  } catch (error) {
+    console.error("Account deactivation error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Something went wrong while deactivating your account.",
+    });
+  }
+};
+
+export const reactivateAccount = async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    const user = await User.findById(userId);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User account not found.",
+      });
+    }
+
+    if (user.isActive) {
+      return res.status(400).json({
+        success: false,
+        message: "This account is already active.",
+      });
+    }
+
+    user.isActive = true;
+    user.tokenVersion += 1;
+
+    await user.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Account reactivated successfully.",
+    });
+  } catch (error) {
+    console.error("Account reactivation error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Something went wrong while reactivating the account.",
+    });
+  }
+};
