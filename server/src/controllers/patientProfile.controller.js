@@ -84,3 +84,76 @@ export const getPatientProfile = async (req, res) => {
     });
   }
 };
+
+export const updatePatientProfile = async (req, res) => {
+  try {
+    if (req.user.role !== "patient") {
+      return res.status(403).json({
+        success: false,
+        message: "Only patients can update patient profiles.",
+      });
+    }
+
+    const validation = patientProfileSchema.safeParse(req.body);
+
+    if (!validation.success) {
+      return res.status(400).json({
+        success: false,
+        message: "Please provide valid profile details.",
+        errors: validation.error.flatten().fieldErrors,
+      });
+    }
+
+    const updates = validation.data;
+
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Please provide at least one field to update.",
+      });
+    }
+
+    const profile = await PatientProfile.findOne({
+      user: req.user._id,
+    });
+
+    if (!profile) {
+      return res.status(404).json({
+        success: false,
+        message: "Patient profile not found.",
+      });
+    }
+
+    // Update nested objects without replacing existing nested fields.
+    if (updates.address) {
+      updates.address = {
+        ...profile.address.toObject(),
+        ...updates.address,
+      };
+    }
+
+    if (updates.emergencyContact) {
+      updates.emergencyContact = {
+        ...profile.emergencyContact.toObject(),
+        ...updates.emergencyContact,
+      };
+    }
+
+    Object.assign(profile, updates);
+
+    await profile.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Patient profile updated successfully.",
+      profile,
+    });
+  } catch (error) {
+    console.error("Patient profile update error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Something went wrong while updating your profile.",
+    });
+  }
+};
