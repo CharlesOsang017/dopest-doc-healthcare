@@ -11,13 +11,18 @@ import {
 
 dotenv.config();
 
-const token = jwt.sign(
-  { id: User._id, role: User.role },
-  process.env.JWT_SECRET,
-  {
-    expiresIn: process.env.JWT_EXPIRES_IN || "1d",
-  },
-);
+const createAuthToken = (user) =>
+  jwt.sign(
+    {
+      id: user._id,
+      role: user.role,
+      tokenVersion: user.tokenVersion,
+    },
+    process.env.JWT_SECRET,
+    {
+      expiresIn: process.env.JWT_EXPIRES_IN || "1d",
+    },
+  );
 
 export const registerUser = async (req, res) => {
   try {
@@ -57,6 +62,7 @@ export const registerUser = async (req, res) => {
       phone,
       role: "patient",
     });
+    const token = createAuthToken(user);
 
     // 6. Return response
     return res.status(201).json({
@@ -131,16 +137,7 @@ export const loginUser = async (req, res) => {
       });
     }
 
-    const token = jwt.sign(
-      {
-        id: user._id,
-        role: user.role,
-      },
-      process.env.JWT_SECRET,
-      {
-        expiresIn: process.env.JWT_EXPIRES_IN || "1d",
-      },
-    );
+    const token = createAuthToken(user);
 
     return res.status(200).json({
       success: true,
@@ -277,6 +274,7 @@ export const changePassword = async (req, res) => {
     }
 
     user.password = await bcrypt.hash(newPassword, 12);
+    user.tokenVersion += 1;
 
     await user.save();
 
@@ -290,6 +288,26 @@ export const changePassword = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Something went wrong while changing your password.",
+    });
+  }
+};
+
+export const logoutUser = async (req, res) => {
+  try {
+    await User.findByIdAndUpdate(req.user._id, {
+      $inc: { tokenVersion: 1 },
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Logged out successfully.",
+    });
+  } catch (error) {
+    console.error("Logout error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Something went wrong while logging out.",
     });
   }
 };

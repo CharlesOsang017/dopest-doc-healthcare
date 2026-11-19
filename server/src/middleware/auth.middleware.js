@@ -25,11 +25,17 @@ export const protect = async (req, res, next) => {
 
     // Retrieve the current user rather than trusting the role in the token.
     const user = await User.findById(decoded.id);
-
     if (!user) {
       return res.status(401).json({
         success: false,
         message: "User account no longer exists.",
+      });
+    }
+
+    if (decoded.tokenVersion !== user.tokenVersion) {
+      return res.status(401).json({
+        success: false,
+        message: "Your session is no longer valid. Please log in again.",
       });
     }
 

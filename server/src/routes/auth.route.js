@@ -3,6 +3,7 @@ import {
   changePassword,
   getCurrentUser,
   loginUser,
+  logoutUser,
   registerUser,
   updateUserProfile,
 } from "../controllers/auth.controller.js";
@@ -18,6 +19,7 @@ router.post("/login", loginUser);
 router.get("/me", protect, getCurrentUser);
 router.patch("/profile", protect, updateUserProfile);
 router.patch("/change-password", protect, changePassword);
+router.post("/logout", protect, logoutUser);
 // Example role-restricted route
 router.get("/admin-only", protect, authorizeRoles("admin"), (req, res) => {
   res.status(200).json({
