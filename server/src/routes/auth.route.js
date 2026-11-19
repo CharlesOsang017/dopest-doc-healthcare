@@ -1,5 +1,6 @@
 import express from "express";
 import {
+  changePassword,
   getCurrentUser,
   loginUser,
   registerUser,
@@ -16,6 +17,7 @@ router.post("/login", loginUser);
 // protected routes
 router.get("/me", protect, getCurrentUser);
 router.patch("/profile", protect, updateUserProfile);
+router.patch("/change-password", protect, changePassword);
 // Example role-restricted route
 router.get("/admin-only", protect, authorizeRoles("admin"), (req, res) => {
   res.status(200).json({

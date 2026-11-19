@@ -2,7 +2,12 @@ import dotenv from "dotenv";
 import bcrypt from "bcryptjs";
 import User from "../models/user.model.js";
 import jwt from "jsonwebtoken";
-import { loginSchema, registerSchema, updateSchema } from "../schemas.js";
+import {
+  loginSchema,
+  passwordSchema,
+  registerSchema,
+  updateSchema,
+} from "../schemas.js";
 
 dotenv.config();
 
@@ -223,6 +228,68 @@ export const updateUserProfile = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Something went wrong while updating your profile.",
+    });
+  }
+};
+
+export const changePassword = async (req, res) => {
+  try {
+    const validation = passwordSchema.safeParse(req.body);
+    if (!validation.success) {
+      return res.status(400).json({
+        success: false,
+        message: "Please provide valid password details.",
+        errors: validation.error.flatten().fieldErrors,
+      });
+    }
+
+    const { currentPassword, newPassword } = validation.data;
+
+    // Retrieve the user's password, which is excluded by default.
+    const user = await User.findById(req.user._id).select("+password");
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User account not found.",
+      });
+    }
+
+    const isCurrentPasswordValid = await bcrypt.compare(
+      currentPassword,
+      user.password,
+    );
+
+    if (!isCurrentPasswordValid) {
+      return res.status(400).json({
+        success: false,
+        message: "Your current password is incorrect.",
+      });
+    }
+
+    const isSamePassword = await bcrypt.compare(newPassword, user.password);
+
+    if (isSamePassword) {
+      return res.status(400).json({
+        success: false,
+        message: "New password cannot match current password.",
+      });
+    }
+
+    user.password = await bcrypt.hash(newPassword, 12);
+
+    await user.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Password changed successfully.",
+    });
+  } catch (error) {
+    console.error("Password change error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Something went wrong while changing your password.",
     });
   }
 };
