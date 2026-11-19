@@ -1,5 +1,3 @@
-import { z } from "zod";
-// import PatientProfile from "../models/PatientProfile.js";
 import { patientProfileSchema } from "../schemas.js";
 import PatientProfile from "../models/patientprofile.model.js";
 
@@ -49,6 +47,40 @@ export const createPatientProfile = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Something went wrong while creating your profile.",
+    });
+  }
+};
+
+export const getPatientProfile = async (req, res) => {
+  try {
+    if (req.user.role !== "patient") {
+      return res.status(403).json({
+        success: false,
+        message: "Only patients can access patient profiles.",
+      });
+    }
+
+    const profile = await PatientProfile.findOne({
+      user: req.user._id,
+    }).populate("user", "name email phone");
+
+    if (!profile) {
+      return res.status(404).json({
+        success: false,
+        message: "Patient profile not found.",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      profile,
+    });
+  } catch (error) {
+    console.error("Patient profile retrieval error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Something went wrong while retrieving your profile.",
     });
   }
 };
