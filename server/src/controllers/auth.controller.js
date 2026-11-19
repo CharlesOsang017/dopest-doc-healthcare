@@ -2,7 +2,7 @@ import dotenv from "dotenv";
 import bcrypt from "bcryptjs";
 import User from "../models/user.model.js";
 import jwt from "jsonwebtoken";
-import { loginSchema, registerSchema } from "../schemas.js";
+import { loginSchema, registerSchema, updateSchema } from "../schemas.js";
 
 dotenv.config();
 
@@ -155,6 +155,74 @@ export const loginUser = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Something went wrong while logging in.",
+    });
+  }
+};
+
+export const getCurrentUser = async (req, res) => {
+  return res.status(200).json({
+    success: true,
+    user: {
+      id: req.user._id,
+      name: req.user.name,
+      email: req.user.email,
+      phone: req.user.phone,
+      role: req.user.role,
+    },
+  });
+};
+
+export const updateUserProfile = async (req, res) => {
+  try {
+    const validation = updateSchema.safeParse(req.body);
+    if (!validation.success) {
+      return res.status(400).json({
+        success: false,
+        message: "Please provide valid profile details.",
+        errors: validation.error.flatten().fieldErrors,
+      });
+    }
+    const updates = validation.data;
+
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Please provide at least one field to update.",
+      });
+    }
+    const user = await User.findByIdAndUpdate(
+      req.user._id,
+      { $set: updates },
+      {
+        new: true,
+        runValidators: true,
+      },
+    );
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User account not found.",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Profile updated successfully.",
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        role: user.role,
+      },
+    });
+  } catch (error) {
+    console.error("Profile update error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Something went wrong while updating your profile.",
     });
   }
 };
