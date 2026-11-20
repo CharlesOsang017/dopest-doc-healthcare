@@ -32,6 +32,30 @@ const doctorProfileSchema = new mongoose.Schema(
       uppercase: true,
     },
 
+    licenseVerificationStatus: {
+      type: String,
+      enum: ["pending", "verified", "rejected"],
+      default: "pending",
+    },
+
+    licenseVerifiedAt: {
+      type: Date,
+      default: null,
+    },
+
+    licenseVerifiedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+
+    licenseRejectionReason: {
+      type: String,
+      trim: true,
+      default: "",
+      maxlength: 500,
+    },
+
     yearsOfExperience: {
       type: Number,
       min: 0,

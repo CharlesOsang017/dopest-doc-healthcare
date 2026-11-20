@@ -1,10 +1,13 @@
 import cloudinary from "../config/cloudinary.js";
 
-const uploadToCloudinary = (fileBuffer) => {
+const uploadToCloudinary = (
+  fileBuffer,
+  folder = "dopest-doc/patient-profiles",
+) => {
   return new Promise((resolve, reject) => {
     const uploadStream = cloudinary.uploader.upload_stream(
       {
-        folder: "dopest-doc/patient-profiles",
+        folder,
         resource_type: "image",
         transformation: [
           {

@@ -1,6 +1,6 @@
 import cloudinary from "../config/cloudinary.js";
 import DoctorProfile from "../models/doctorProfile.model.js";
-import { doctorProfileSchema } from "../schemas.js";
+import { doctorProfileSchema, rejectionSchema } from "../schemas.js";
 import { calculateDoctorProfileCompletion } from "../utils/profileCompletion.js";
 import uploadToCloudinary from "../utils/uploadToCloudinary.js";
 
@@ -138,6 +138,17 @@ export const updateDoctorProfile = async (req, res) => {
       });
     }
 
+    // Reset verification if the doctor changes their license number.
+    if (
+      validation.data.licenseNumber &&
+      validation.data.licenseNumber !== profile.licenseNumber
+    ) {
+      profile.licenseVerificationStatus = "pending";
+      profile.licenseVerifiedAt = null;
+      profile.licenseVerifiedBy = null;
+      profile.licenseRejectionReason = "";
+    }
+
     Object.assign(profile, validation.data);
 
     profile.profileCompleted = calculateDoctorProfileCompletion(profile);
@@ -196,7 +207,10 @@ export const uploadDoctorProfilePhoto = async (req, res) => {
     }
 
     // Upload the new image.
-    uploadedImage = await uploadToCloudinary(req.file.buffer);
+    uploadedImage = await uploadToCloudinary(
+      req.file.buffer,
+      "dopest-doc/doctor-profiles",
+    );
 
     // Keep the previous image ID.
     const previousPublicId = profile.profilePhotoPublicId;
@@ -297,6 +311,96 @@ export const deleteDoctorProfilePhoto = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Something went wrong while deleting the doctor profile photo.",
+    });
+  }
+};
+
+export const approveDoctorLicense = async (req, res) => {
+  try {
+    if (req.user.role !== "admin") {
+      return res.status(403).json({
+        success: false,
+        message: "Only administrators can verify doctor licenses.",
+      });
+    }
+
+    const profile = await DoctorProfile.findById(req.params.profileId);
+
+    if (!profile) {
+      return res.status(404).json({
+        success: false,
+        message: "Doctor profile not found.",
+      });
+    }
+
+    profile.licenseVerificationStatus = "verified";
+    profile.licenseVerifiedAt = new Date();
+    profile.licenseVerifiedBy = req.user._id;
+    profile.licenseRejectionReason = "";
+
+    await profile.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Doctor license verified successfully.",
+      profile,
+    });
+  } catch (error) {
+    console.error("Doctor license approval error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Something went wrong while verifying the doctor license.",
+    });
+  }
+};
+
+export const rejectDoctorLicense = async (req, res) => {
+  try {
+    if (req.user.role !== "admin") {
+      return res.status(403).json({
+        success: false,
+        message: "Only administrators can reject doctor licenses.",
+      });
+    }
+
+    const validation = rejectionSchema.safeParse(req.body);
+
+    if (!validation.success) {
+      return res.status(400).json({
+        success: false,
+        message: "Please provide a valid rejection reason.",
+        errors: validation.error.flatten().fieldErrors,
+      });
+    }
+
+    const profile = await DoctorProfile.findById(req.params.profileId);
+
+    if (!profile) {
+      return res.status(404).json({
+        success: false,
+        message: "Doctor profile not found.",
+      });
+    }
+
+    profile.licenseVerificationStatus = "rejected";
+    profile.licenseVerifiedAt = null;
+    profile.licenseVerifiedBy = null;
+    profile.licenseRejectionReason = validation.data.reason;
+
+    await profile.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Doctor license rejected successfully.",
+      profile,
+    });
+  } catch (error) {
+    console.error("Doctor license rejection error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Something went wrong while rejecting the doctor license.",
     });
   }
 };

@@ -54,7 +54,7 @@ export const patientProfileSchema = z
   })
   .strict();
 
-export const doctorProfileSchema = z
+ export const doctorProfileSchema = z
   .object({
     specialization: z.string().trim().min(2).max(100),
 
@@ -71,3 +71,9 @@ export const doctorProfileSchema = z
     languages: z.array(z.string().trim().min(2).max(50)).optional(),
   })
   .strict();
+
+  export const rejectionSchema = z
+    .object({
+      reason: z.string().trim().min(5).max(500),
+    })
+    .strict();
