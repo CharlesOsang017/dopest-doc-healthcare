@@ -1,5 +1,6 @@
 import { patientProfileSchema } from "../schemas.js";
 import PatientProfile from "../models/patientprofile.model.js";
+import { calculateProfileCompletion } from "../utils/calculateProfileCompletion.js";
 
 export const createPatientProfile = async (req, res) => {
   try {
@@ -31,10 +32,14 @@ export const createPatientProfile = async (req, res) => {
       });
     }
 
-    const profile = await PatientProfile.create({
+    const profileData = {
       user: req.user._id,
       ...validation.data,
-    });
+    };
+
+    profileData.profileCompleted = calculateProfileCompletion(profileData);
+
+    const profile = await PatientProfile.create(profileData);
 
     return res.status(201).json({
       success: true,
@@ -140,6 +145,8 @@ export const updatePatientProfile = async (req, res) => {
     }
 
     Object.assign(profile, updates);
+
+    profile.profileCompleted = calculateProfileCompletion(profile);
 
     await profile.save();
 
