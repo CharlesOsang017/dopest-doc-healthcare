@@ -96,3 +96,70 @@ export const getDoctorProfile = async (req, res) => {
     });
   }
 };
+
+export const updateDoctorProfile = async (req, res) => {
+  try {
+    if (req.user.role !== "doctor") {
+      return res.status(403).json({
+        success: false,
+        message: "Only doctors can update doctor profiles.",
+      });
+    }
+
+    const updateSchema = doctorProfileSchema.partial();
+
+    const validation = updateSchema.safeParse(req.body);
+
+    if (!validation.success) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid doctor profile information.",
+        errors: validation.error.flatten().fieldErrors,
+      });
+    }
+
+    if (Object.keys(validation.data).length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Please provide at least one field to update.",
+      });
+    }
+
+    const profile = await DoctorProfile.findOne({
+      user: req.user._id,
+    });
+
+    if (!profile) {
+      return res.status(404).json({
+        success: false,
+        message: "Doctor profile not found.",
+      });
+    }
+
+    Object.assign(profile, validation.data);
+
+    profile.profileCompleted = calculateDoctorProfileCompletion(profile);
+
+    await profile.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Doctor profile updated successfully.",
+      profile,
+    });
+  } catch (error) {
+    if (error.code === 11000) {
+      return res.status(409).json({
+        success: false,
+        message: "This medical license number is already registered.",
+      });
+    }
+
+    console.error("Doctor profile update error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Something went wrong while updating the doctor profile.",
+    });
+  }
+};
