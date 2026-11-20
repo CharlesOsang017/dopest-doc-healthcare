@@ -1,3 +1,4 @@
+import cloudinary from "../config/cloudinary.js";
 import DoctorProfile from "../models/doctorProfile.model.js";
 import { doctorProfileSchema } from "../schemas.js";
 import { calculateDoctorProfileCompletion } from "../utils/profileCompletion.js";
@@ -239,6 +240,63 @@ export const uploadDoctorProfilePhoto = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Something went wrong while uploading the doctor profile photo.",
+    });
+  }
+};
+
+export const deleteDoctorProfilePhoto = async (req, res) => {
+  try {
+    if (req.user.role !== "doctor") {
+      return res.status(403).json({
+        success: false,
+        message: "Only doctors can delete profile photos.",
+      });
+    }
+
+    const profile = await DoctorProfile.findOne({
+      user: req.user._id,
+    });
+
+    if (!profile) {
+      return res.status(404).json({
+        success: false,
+        message: "Doctor profile not found.",
+      });
+    }
+
+    if (!profile.profilePhotoPublicId) {
+      return res.status(404).json({
+        success: false,
+        message: "No profile photo found.",
+      });
+    }
+
+    const result = await cloudinary.uploader.destroy(
+      profile.profilePhotoPublicId,
+    );
+
+    if (result.result !== "ok" && result.result !== "not found") {
+      return res.status(500).json({
+        success: false,
+        message: "Failed to delete profile photo.",
+      });
+    }
+
+    profile.profilePhoto = "";
+    profile.profilePhotoPublicId = "";
+
+    await profile.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Doctor profile photo deleted successfully.",
+    });
+  } catch (error) {
+    console.error("Doctor profile photo deletion error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Something went wrong while deleting the doctor profile photo.",
     });
   }
 };

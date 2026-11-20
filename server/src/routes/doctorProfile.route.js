@@ -2,6 +2,7 @@ import express from "express";
 import { protect } from "../middleware/auth.middleware.js";
 import {
   createDoctorProfile,
+  deleteDoctorProfilePhoto,
   getDoctorProfile,
   updateDoctorProfile,
   uploadDoctorProfilePhoto,
@@ -19,4 +20,5 @@ router.post(
   upload.single("photo"),
   uploadDoctorProfilePhoto,
 );
+router.delete("/me/photo", protect, deleteDoctorProfilePhoto);
 export default router;
