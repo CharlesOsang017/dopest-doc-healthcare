@@ -62,3 +62,37 @@ export const createDoctorProfile = async (req, res) => {
     });
   }
 };
+
+export const getDoctorProfile = async (req, res) => {
+  try {
+    if (req.user.role !== "doctor") {
+      return res.status(403).json({
+        success: false,
+        message: "Only doctors can access this profile.",
+      });
+    }
+
+    const profile = await DoctorProfile.findOne({
+      user: req.user._id,
+    }).populate("user", "name email phone");
+
+    if (!profile) {
+      return res.status(404).json({
+        success: false,
+        message: "Doctor profile not found.",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      profile,
+    });
+  } catch (error) {
+    console.error("Get doctor profile error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Something went wrong while retrieving the doctor profile.",
+    });
+  }
+};
