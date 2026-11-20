@@ -2,7 +2,9 @@ import { patientProfileSchema } from "../schemas.js";
 import PatientProfile from "../models/patientprofile.model.js";
 import { calculateProfileCompletion } from "../utils/calculateProfileCompletion.js";
 import uploadToCloudinary from "../utils/uploadToCloudinary.js";
+import cloudinary from "../config/cloudinary.js";
 
+6;
 export const createPatientProfile = async (req, res) => {
   try {
     if (req.user.role !== "patient") {
@@ -167,6 +169,8 @@ export const updatePatientProfile = async (req, res) => {
 };
 
 export const uploadPatientProfilePhoto = async (req, res) => {
+  let uploadedImage;
+
   try {
     if (req.user.role !== "patient") {
       return res.status(403).json({
@@ -193,23 +197,105 @@ export const uploadPatientProfilePhoto = async (req, res) => {
       });
     }
 
-    const result = await uploadToCloudinary(req.file.buffer);
+    // Upload the new image to Cloudinary.
+    uploadedImage = await uploadToCloudinary(req.file.buffer);
 
-    profile.profilePhoto = result.secure_url;
+    // Keep track of the previous Cloudinary image.
+    const previousPublicId = profile.profilePhotoPublicId;
+
+    // Save the new image details.
+    profile.profilePhoto = uploadedImage.secure_url;
+    profile.profilePhotoPublicId = uploadedImage.public_id;
 
     await profile.save();
+
+    // Delete the previous image after the new one is saved.
+    if (previousPublicId) {
+      try {
+        await cloudinary.uploader.destroy(previousPublicId);
+      } catch (deleteError) {
+        console.error("Previous profile photo deletion error:", deleteError);
+      }
+    }
 
     return res.status(200).json({
       success: true,
       message: "Profile photo uploaded successfully.",
       profilePhoto: profile.profilePhoto,
+      profilePhotoPublicId: profile.profilePhotoPublicId,
     });
   } catch (error) {
+    // Clean up the newly uploaded image if saving fails.
+    if (uploadedImage?.public_id) {
+      try {
+        await cloudinary.uploader.destroy(uploadedImage.public_id);
+      } catch (cleanupError) {
+        console.error("Cloudinary cleanup error:", cleanupError);
+      }
+    }
+
     console.error("Profile photo upload error:", error);
 
     return res.status(500).json({
       success: false,
       message: "Something went wrong while uploading your profile photo.",
+    });
+  }
+};
+
+export const deletePatientProfilePhoto = async (req, res) => {
+  try {
+    if (req.user.role !== "patient") {
+      return res.status(403).json({
+        success: false,
+        message: "Only patients can delete profile photos.",
+      });
+    }
+
+    const profile = await PatientProfile.findOne({
+      user: req.user._id,
+    });
+
+    if (!profile) {
+      return res.status(404).json({
+        success: false,
+        message: "Patient profile not found.",
+      });
+    }
+
+    if (!profile.profilePhotoPublicId) {
+      return res.status(404).json({
+        success: false,
+        message: "No profile photo found.",
+      });
+    }
+
+    const result = await cloudinary.uploader.destroy(
+      profile.profilePhotoPublicId,
+    );
+
+    if (result.result !== "ok" && result.result !== "not found") {
+      return res.status(500).json({
+        success: false,
+        message: "Failed to delete profile photo.",
+      });
+    }
+
+    profile.profilePhoto = "";
+    profile.profilePhotoPublicId = "";
+
+    await profile.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Profile photo deleted successfully.",
+    });
+  } catch (error) {
+    console.error("Profile photo deletion error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Something went wrong while deleting the profile photo.",
     });
   }
 };
