@@ -53,3 +53,21 @@ export const patientProfileSchema = z
     profilePhoto: z.string().url().optional(),
   })
   .strict();
+
+export const doctorProfileSchema = z
+  .object({
+    specialization: z.string().trim().min(2).max(100),
+
+    qualifications: z.array(z.string().trim().min(2).max(150)).min(1),
+
+    licenseNumber: z.string().trim().min(3).max(50),
+
+    yearsOfExperience: z.number().min(0).max(80).optional(),
+
+    consultationFee: z.number().min(0).optional(),
+
+    bio: z.string().trim().max(1000).optional(),
+
+    languages: z.array(z.string().trim().min(2).max(50)).optional(),
+  })
+  .strict();

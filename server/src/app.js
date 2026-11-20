@@ -3,6 +3,7 @@ import cors from "cors";
 import helmet from "helmet";
 import authRoutes from "./routes/auth.route.js";
 import patientProfileRoutes from "./routes/patientProfile.route.js";
+import doctorProfileRoutes from "./routes/doctorProfile.route.js";
 
 const app = express();
 
@@ -25,5 +26,7 @@ app.get("/api/v1/health", (req, res) => {
 app.use("/api/v1/auth", authRoutes);
 // patient-profile routes
 app.use("/api/v1/patient-profile", patientProfileRoutes);
+// doctor-profile routes
+app.use("/api/v1/doctor-profile", doctorProfileRoutes);
 
 export default app;

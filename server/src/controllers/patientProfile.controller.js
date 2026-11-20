@@ -1,6 +1,6 @@
 import { patientProfileSchema } from "../schemas.js";
 import PatientProfile from "../models/patientprofile.model.js";
-import { calculateProfileCompletion } from "../utils/calculateProfileCompletion.js";
+import { calculatePatientProfileCompletion } from "../utils/profileCompletion.js";
 import uploadToCloudinary from "../utils/uploadToCloudinary.js";
 import cloudinary from "../config/cloudinary.js";
 
@@ -40,7 +40,8 @@ export const createPatientProfile = async (req, res) => {
       ...validation.data,
     };
 
-    profileData.profileCompleted = calculateProfileCompletion(profileData);
+    profileData.profileCompleted =
+      calculatePatientProfileCompletion(profileData);
 
     const profile = await PatientProfile.create(profileData);
 

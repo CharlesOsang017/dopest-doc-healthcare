@@ -1,4 +1,4 @@
-export const calculateProfileCompletion = (profile) => {
+export const calculatePatientProfileCompletion = (profile) => {
   const requiredFields = [
     profile.dateOfBirth,
     profile.gender,
@@ -14,4 +14,13 @@ export const calculateProfileCompletion = (profile) => {
   });
 
   return completedFields.length === requiredFields.length;
+};
+
+export const calculateDoctorProfileCompletion = (profile) => {
+  return Boolean(
+    profile.specialization &&
+    profile.qualifications.length > 0 &&
+    profile.licenseNumber &&
+    profile.yearsOfExperience !== undefined,
+  );
 };
