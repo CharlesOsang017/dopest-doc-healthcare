@@ -62,6 +62,11 @@ const doctorProfileSchema = new mongoose.Schema(
       default: "",
     },
 
+    profilePhotoPublicId: {
+      type: String,
+      default: "",
+    },
+
     profileCompleted: {
       type: Boolean,
       default: false,

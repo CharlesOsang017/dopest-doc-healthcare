@@ -4,12 +4,19 @@ import {
   createDoctorProfile,
   getDoctorProfile,
   updateDoctorProfile,
+  uploadDoctorProfilePhoto,
 } from "../controllers/doctorProfile.controller.js";
+import upload from "../middleware/upload.middleware.js";
 
 const router = express.Router();
 
 router.post("/", protect, createDoctorProfile);
 router.get("/me", protect, getDoctorProfile);
 router.patch("/me", protect, updateDoctorProfile);
-
+router.post(
+  "/me/photo",
+  protect,
+  upload.single("photo"),
+  uploadDoctorProfilePhoto,
+);
 export default router;
