@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { daysOfWeek } from "./utils/daysOfWeek.js";
+import mongoose from "mongoose";
 
 export const registerSchema = z.object({
   name: z.string().trim().min(2).max(100),
@@ -107,5 +108,30 @@ export const weeklyScheduleSchema = z
       .max(7),
     slotDuration: z.number().int().min(5).max(240).optional(),
     isAcceptingAppointments: z.boolean().optional(),
+  })
+  .strict();
+
+export const bookingSchema = z
+  .object({
+    doctorId: z
+      .string()
+      .refine(
+        (value) => mongoose.Types.ObjectId.isValid(value),
+        "Invalid doctor ID.",
+      ),
+    appointmentDate: z
+      .string()
+      .regex(
+        /^\d{4}-\d{2}-\d{2}$/,
+        "Appointment date must use YYYY-MM-DD format.",
+      ),
+    startTime: z
+      .string()
+      .regex(
+        /^([01]\d|2[0-3]):([0-5]\d)$/,
+        "Start time must use HH:mm format.",
+      ),
+    reason: z.string().trim().min(5).max(1000),
+    consultationType: z.enum(["in-person", "online"]).optional(),
   })
   .strict();
