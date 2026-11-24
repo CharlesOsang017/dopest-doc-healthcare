@@ -1,10 +1,8 @@
-import { z } from "zod";
 import DoctorAvailability from "../models/doctorAvailability.model.js";
 import { weeklyScheduleSchema } from "../schemas.js";
+import DoctorProfile from "../models/doctorProfile.model.js";
+import User from "../models/user.model.js";
 // import DoctorAvailability from "../models/DoctorAvailability.js";
-
-
-
 
 const validateSchedule = (schedule) => {
   const seenDays = new Set();
@@ -113,6 +111,62 @@ export const getMyDoctorAvailability = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Something went wrong while retrieving availability.",
+    });
+  }
+};
+
+export const getPublicDoctorAvailability = async (req, res) => {
+  try {
+    const { doctorId } = req.params;
+
+    const doctor = await User.findOne({
+      _id: doctorId,
+      role: "doctor",
+      isActive: true,
+    }).select("_id");
+
+    if (!doctor) {
+      return res.status(404).json({
+        success: false,
+        message: "Doctor not found.",
+      });
+    }
+
+    const doctorProfile = await DoctorProfile.findOne({
+      user: doctor._id,
+      licenseVerificationStatus: "verified",
+    }).select("_id");
+
+    if (!doctorProfile) {
+      return res.status(404).json({
+        success: false,
+        message: "Verified doctor profile not found.",
+      });
+    }
+
+    const availability = await DoctorAvailability.findOne({
+      doctor: doctor._id,
+      isAcceptingAppointments: true,
+    }).select("weeklySchedule slotDuration isAcceptingAppointments");
+
+    if (!availability) {
+      return res.status(404).json({
+        success: false,
+        message: "Doctor is currently not accepting appointments.",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      doctorId: doctor._id,
+      availability,
+    });
+  } catch (error) {
+    console.error("Get public doctor availability error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Something went wrong while retrieving doctor availability.",
     });
   }
 };
