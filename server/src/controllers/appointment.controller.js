@@ -333,3 +333,112 @@ export const getDoctorAppointments = async (req, res) => {
     });
   }
 };
+
+export const approveAppointment = async (req, res) => {
+  try {
+    if (req.user.role !== "doctor") {
+      return res.status(403).json({
+        success: false,
+        message: "Only doctors can approve appointments.",
+      });
+    }
+
+    const appointment = await Appointment.findOne({
+      _id: req.params.appointmentId,
+      doctor: req.user._id,
+    });
+
+    if (!appointment) {
+      return res.status(404).json({
+        success: false,
+        message: "Appointment not found.",
+      });
+    }
+
+    if (appointment.status !== "pending") {
+      return res.status(400).json({
+        success: false,
+        message: "Only pending appointments can be approved.",
+      });
+    }
+
+    // Recheck for conflicting appointments before confirmation.
+    const conflict = await Appointment.findOne({
+      _id: { $ne: appointment._id },
+      doctor: req.user._id,
+      appointmentDate: appointment.appointmentDate,
+      status: "confirmed",
+      startTime: { $lt: appointment.endTime },
+      endTime: { $gt: appointment.startTime },
+    });
+
+    if (conflict) {
+      return res.status(409).json({
+        success: false,
+        message: "This time slot conflicts with another confirmed appointment.",
+      });
+    }
+
+    appointment.status = "confirmed";
+    await appointment.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Appointment approved successfully.",
+      appointment,
+    });
+  } catch (error) {
+    console.error("Approve appointment error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Something went wrong while approving the appointment.",
+    });
+  }
+};
+
+export const rejectAppointment = async (req, res) => {
+  try {
+    if (req.user.role !== "doctor") {
+      return res.status(403).json({
+        success: false,
+        message: "Only doctors can reject appointments.",
+      });
+    }
+
+    const appointment = await Appointment.findOne({
+      _id: req.params.appointmentId,
+      doctor: req.user._id,
+    });
+
+    if (!appointment) {
+      return res.status(404).json({
+        success: false,
+        message: "Appointment not found.",
+      });
+    }
+
+    if (appointment.status !== "pending") {
+      return res.status(400).json({
+        success: false,
+        message: "Only pending appointments can be rejected.",
+      });
+    }
+
+    appointment.status = "rejected";
+    await appointment.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Appointment rejected successfully.",
+      appointment,
+    });
+  } catch (error) {
+    console.error("Reject appointment error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Something went wrong while rejecting the appointment.",
+    });
+  }
+};
