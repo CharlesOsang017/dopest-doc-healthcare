@@ -197,3 +197,71 @@ export const bookAppointment = async (req, res) => {
     });
   }
 };
+
+export const getMyAppointments = async (req, res) => {
+  try {
+    if (req.user.role !== "patient") {
+      return res.status(403).json({
+        success: false,
+        message: "Only patients can view their appointments.",
+      });
+    }
+
+    const page = Math.max(1, Number.parseInt(req.query.page, 10) || 1);
+
+    const limit = Math.min(
+      50,
+      Math.max(1, Number.parseInt(req.query.limit, 10) || 10),
+    );
+
+    const skip = (page - 1) * limit;
+
+    const allowedStatuses = [
+      "pending",
+      "confirmed",
+      "rejected",
+      "cancelled",
+      "completed",
+    ];
+
+    const filter = {
+      patient: req.user._id,
+    };
+
+    if (req.query.status) {
+      if (!allowedStatuses.includes(req.query.status)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid appointment status.",
+        });
+      }
+
+      filter.status = req.query.status;
+    }
+
+    const [appointments, total] = await Promise.all([
+      Appointment.find(filter)
+        .populate("doctor", "name")
+        .sort({ appointmentDate: -1, startTime: -1 })
+        .skip(skip)
+        .limit(limit),
+
+      Appointment.countDocuments(filter),
+    ]);
+
+    return res.status(200).json({
+      success: true,
+      total,
+      currentPage: page,
+      totalPages: Math.ceil(total / limit),
+      appointments,
+    });
+  } catch (error) {
+    console.error("Get patient appointments error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Something went wrong while retrieving appointments.",
+    });
+  }
+};
