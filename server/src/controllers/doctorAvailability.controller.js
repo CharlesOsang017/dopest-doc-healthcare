@@ -2,6 +2,7 @@ import DoctorAvailability from "../models/doctorAvailability.model.js";
 import { weeklyScheduleSchema } from "../schemas.js";
 import DoctorProfile from "../models/doctorProfile.model.js";
 import User from "../models/user.model.js";
+import mongoose from "mongoose";
 // import DoctorAvailability from "../models/DoctorAvailability.js";
 
 const validateSchedule = (schedule) => {
@@ -118,6 +119,13 @@ export const getMyDoctorAvailability = async (req, res) => {
 export const getPublicDoctorAvailability = async (req, res) => {
   try {
     const { doctorId } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(doctorId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid doctor ID.",
+      });
+    }
 
     const doctor = await User.findOne({
       _id: doctorId,
