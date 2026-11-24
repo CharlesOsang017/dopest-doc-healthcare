@@ -404,3 +404,96 @@ export const rejectDoctorLicense = async (req, res) => {
     });
   }
 };
+
+export const getPendingDoctorLicenses = async (req, res) => {
+  try {
+    if (req.user.role !== "admin") {
+      return res.status(403).json({
+        success: false,
+        message: "Only administrators can view pending doctor licenses.",
+      });
+    }
+
+    const page = Math.max(1, Number.parseInt(req.query.page, 10) || 1);
+
+    const limit = Math.min(
+      50,
+      Math.max(1, Number.parseInt(req.query.limit, 10) || 10),
+    );
+
+    const skip = (page - 1) * limit;
+
+    const [profiles, total] = await Promise.all([
+      DoctorProfile.find({
+        licenseVerificationStatus: "pending",
+      })
+        .populate("user", "name email phone")
+        .select(
+          "user specialization qualifications licenseNumber yearsOfExperience consultationFee bio languages profilePhoto licenseVerificationStatus createdAt",
+        )
+        .sort({ createdAt: 1 })
+        .skip(skip)
+        .limit(limit),
+
+      DoctorProfile.countDocuments({
+        licenseVerificationStatus: "pending",
+      }),
+    ]);
+
+    return res.status(200).json({
+      success: true,
+      total,
+      currentPage: page,
+      totalPages: Math.ceil(total / limit),
+      profiles,
+    });
+  } catch (error) {
+    console.error("Pending doctor licenses error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Something went wrong while retrieving pending doctor licenses.",
+    });
+  }
+};
+
+export const getDoctorLicenseStatus = async (req, res) => {
+  try {
+    if (req.user.role !== "doctor") {
+      return res.status(403).json({
+        success: false,
+        message: "Only doctors can view their license status.",
+      });
+    }
+
+    const profile = await DoctorProfile.findOne({
+      user: req.user._id,
+    }).select(
+      "licenseNumber licenseVerificationStatus licenseVerifiedAt licenseRejectionReason",
+    );
+
+    if (!profile) {
+      return res.status(404).json({
+        success: false,
+        message: "Doctor profile not found.",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      license: {
+        licenseNumber: profile.licenseNumber,
+        status: profile.licenseVerificationStatus || "pending",
+        verifiedAt: profile.licenseVerifiedAt,
+        rejectionReason: profile.licenseRejectionReason,
+      },
+    });
+  } catch (error) {
+    console.error("Doctor license status error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Something went wrong while retrieving license status.",
+    });
+  }
+};

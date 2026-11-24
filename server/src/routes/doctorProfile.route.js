@@ -4,7 +4,9 @@ import {
   approveDoctorLicense,
   createDoctorProfile,
   deleteDoctorProfilePhoto,
+  getDoctorLicenseStatus,
   getDoctorProfile,
+  getPendingDoctorLicenses,
   rejectDoctorLicense,
   updateDoctorProfile,
   uploadDoctorProfilePhoto,
@@ -23,9 +25,11 @@ router.post(
   uploadDoctorProfilePhoto,
 );
 router.delete("/me/photo", protect, deleteDoctorProfilePhoto);
+router.get("/admin/pending-licenses", protect, getPendingDoctorLicenses);
+router.get("/me/license-status", protect, getDoctorLicenseStatus);
 // Administrator: approve a doctor's license
 router.patch("/:profileId/license/approve", protect, approveDoctorLicense);
-
 // Administrator: reject a doctor's license
 router.patch("/:profileId/license/reject", protect, rejectDoctorLicense);
+
 export default router;
