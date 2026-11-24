@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { daysOfWeek } from "./utils/daysOfWeek.js";
 
 export const registerSchema = z.object({
   name: z.string().trim().min(2).max(100),
@@ -54,7 +55,7 @@ export const patientProfileSchema = z
   })
   .strict();
 
- export const doctorProfileSchema = z
+export const doctorProfileSchema = z
   .object({
     specialization: z.string().trim().min(2).max(100),
 
@@ -72,8 +73,39 @@ export const patientProfileSchema = z
   })
   .strict();
 
-  export const rejectionSchema = z
-    .object({
-      reason: z.string().trim().min(5).max(500),
-    })
-    .strict();
+export const rejectionSchema = z
+  .object({
+    reason: z.string().trim().min(5).max(500),
+  })
+  .strict();
+
+export const timeSlotSchema = z
+  .object({
+    startTime: z
+      .string()
+      .regex(
+        /^([01]\d|2[0-3]):([0-5]\d)$/,
+        "Start time must use HH:mm format.",
+      ),
+    endTime: z
+      .string()
+      .regex(/^([01]\d|2[0-3]):([0-5]\d)$/, "End time must use HH:mm format."),
+  })
+  .strict();
+
+export const weeklyScheduleSchema = z
+  .object({
+    weeklySchedule: z
+      .array(
+        z
+          .object({
+            day: z.enum(daysOfWeek),
+            slots: z.array(timeSlotSchema),
+          })
+          .strict(),
+      )
+      .max(7),
+    slotDuration: z.number().int().min(5).max(240).optional(),
+    isAcceptingAppointments: z.boolean().optional(),
+  })
+  .strict();

@@ -4,6 +4,7 @@ import helmet from "helmet";
 import authRoutes from "./routes/auth.route.js";
 import patientProfileRoutes from "./routes/patientProfile.route.js";
 import doctorProfileRoutes from "./routes/doctorProfile.route.js";
+import doctorAvailabilityRoutes from "./routes/doctorAvailability.route.js";
 
 const app = express();
 
@@ -28,5 +29,7 @@ app.use("/api/v1/auth", authRoutes);
 app.use("/api/v1/patient-profile", patientProfileRoutes);
 // doctor-profile routes
 app.use("/api/v1/doctor-profile", doctorProfileRoutes);
+// doctor availability route
+app.use("/api/v1/doctor-availability", doctorAvailabilityRoutes);
 
 export default app;
