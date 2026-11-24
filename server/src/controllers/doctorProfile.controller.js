@@ -497,3 +497,99 @@ export const getDoctorLicenseStatus = async (req, res) => {
     });
   }
 };
+
+export const getPublicDoctors = async (req, res) => {
+  try {
+    const page = Math.max(1, Number.parseInt(req.query.page, 10) || 1);
+
+    const limit = Math.min(
+      50,
+      Math.max(1, Number.parseInt(req.query.limit, 10) || 10),
+    );
+
+    const skip = (page - 1) * limit;
+
+    const matchStage = {
+      licenseVerificationStatus: "verified",
+    };
+
+    if (req.query.specialization) {
+      matchStage.specialization = {
+        $regex: req.query.specialization.trim(),
+        $options: "i",
+      };
+    }
+
+    const pipeline = [
+      {
+        $match: matchStage,
+      },
+      {
+        $lookup: {
+          from: "users",
+          localField: "user",
+          foreignField: "_id",
+          as: "user",
+        },
+      },
+      {
+        $unwind: "$user",
+      },
+      {
+        $match: {
+          "user.isActive": true,
+          "user.role": "doctor",
+        },
+      },
+      {
+        $sort: {
+          createdAt: -1,
+        },
+      },
+      {
+        $facet: {
+          profiles: [
+            { $skip: skip },
+            { $limit: limit },
+            {
+              $project: {
+                specialization: 1,
+                qualifications: 1,
+                yearsOfExperience: 1,
+                consultationFee: 1,
+                bio: 1,
+                languages: 1,
+                profilePhoto: 1,
+                licenseVerificationStatus: 1,
+                user: {
+                  _id: "$user._id",
+                  name: "$user.name",
+                },
+              },
+            },
+          ],
+          totalCount: [{ $count: "total" }],
+        },
+      },
+    ];
+
+    const [result] = await DoctorProfile.aggregate(pipeline);
+
+    const total = result.totalCount[0]?.total || 0;
+
+    return res.status(200).json({
+      success: true,
+      total,
+      currentPage: page,
+      totalPages: Math.ceil(total / limit),
+      doctors: result.profiles,
+    });
+  } catch (error) {
+    console.error("Public doctor directory error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Something went wrong while retrieving doctors.",
+    });
+  }
+};
