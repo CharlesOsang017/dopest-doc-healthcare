@@ -135,3 +135,7 @@ export const bookingSchema = z
     consultationType: z.enum(["in-person", "online"]).optional(),
   })
   .strict();
+
+export const cancelAppointmentSchema = z.object({
+    reason: z.string().trim().min(5).max(500),
+  }).strict();

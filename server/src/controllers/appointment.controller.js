@@ -2,7 +2,7 @@ import Appointment from "../models/appointment.model.js";
 import DoctorAvailability from "../models/doctorAvailability.model.js";
 import DoctorProfile from "../models/doctorProfile.model.js";
 import User from "../models/user.model.js";
-import { bookingSchema } from "../schemas.js";
+import { bookingSchema, cancelAppointmentSchema } from "../schemas.js";
 
 const timeToMinutes = (time) => {
   const [hours, minutes] = time.split(":").map(Number);
@@ -439,6 +439,64 @@ export const rejectAppointment = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Something went wrong while rejecting the appointment.",
+    });
+  }
+};
+
+export const cancelAppointment = async (req, res) => {
+  try {
+    if (req.user.role !== "patient") {
+      return res.status(403).json({
+        success: false,
+        message: "Only patients can cancel their appointments.",
+      });
+    }
+
+    const validation = cancelAppointmentSchema.safeParse(req.body);
+
+    if (!validation.success) {
+      return res.status(400).json({
+        success: false,
+        message: "Please provide a valid cancellation reason.",
+        errors: validation.error.issues,
+      });
+    }
+
+    const appointment = await Appointment.findOne({
+      _id: req.params.appointmentId,
+      patient: req.user._id,
+    });
+
+    if (!appointment) {
+      return res.status(404).json({
+        success: false,
+        message: "Appointment not found.",
+      });
+    }
+
+    if (!["pending", "confirmed"].includes(appointment.status)) {
+      return res.status(400).json({
+        success: false,
+        message: "This appointment cannot be cancelled.",
+      });
+    }
+
+    appointment.status = "cancelled";
+    appointment.cancellationReason = validation.data.reason;
+
+    await appointment.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Appointment cancelled successfully.",
+      appointment,
+    });
+  } catch (error) {
+    console.error("Cancel appointment error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Something went wrong while cancelling the appointment.",
     });
   }
 };
