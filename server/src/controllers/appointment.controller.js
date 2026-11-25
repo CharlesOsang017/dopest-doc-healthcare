@@ -680,3 +680,50 @@ export const rescheduleAppointment = async (req, res) => {
     });
   }
 };
+
+export const completeAppointment = async (req, res) => {
+  try {
+    if (req.user.role !== "doctor") {
+      return res.status(403).json({
+        success: false,
+        message: "Only doctors can complete appointments.",
+      });
+    }
+
+    const appointment = await Appointment.findOne({
+      _id: req.params.appointmentId,
+      doctor: req.user._id,
+    });
+
+    if (!appointment) {
+      return res.status(404).json({
+        success: false,
+        message: "Appointment not found.",
+      });
+    }
+
+    if (appointment.status !== "confirmed") {
+      return res.status(400).json({
+        success: false,
+        message: "Only confirmed appointments can be completed.",
+      });
+    }
+
+    appointment.status = "completed";
+
+    await appointment.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Appointment marked as completed.",
+      appointment,
+    });
+  } catch (error) {
+    console.error("Complete appointment error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Something went wrong while completing the appointment.",
+    });
+  }
+};

@@ -4,6 +4,7 @@ import {
   approveAppointment,
   bookAppointment,
   cancelAppointment,
+  completeAppointment,
   getDoctorAppointments,
   getMyAppointments,
   rejectAppointment,
@@ -19,4 +20,5 @@ router.patch("/:appointmentId/approve", protect, approveAppointment);
 router.patch("/:appointmentId/reject", protect, rejectAppointment);
 router.patch("/:appointmentId/cancel", protect, cancelAppointment);
 router.patch("/:appointmentId/reschedule", protect, rescheduleAppointment);
+router.patch("/:appointmentId/complete", protect, completeAppointment);
 export default router;
