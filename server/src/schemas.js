@@ -139,3 +139,21 @@ export const bookingSchema = z
 export const cancelAppointmentSchema = z.object({
     reason: z.string().trim().min(5).max(500),
   }).strict();
+
+export const rescheduleAppointmentSchema = z
+    .object({
+      appointmentDate: z
+        .string()
+        .regex(
+          /^\d{4}-\d{2}-\d{2}$/,
+          "Appointment date must use YYYY-MM-DD format.",
+        ),
+      startTime: z
+        .string()
+        .regex(
+          /^([01]\d|2[0-3]):([0-5]\d)$/,
+          "Start time must use HH:mm format.",
+        ),
+    })
+    .strict();
+  

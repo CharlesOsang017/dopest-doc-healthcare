@@ -2,7 +2,11 @@ import Appointment from "../models/appointment.model.js";
 import DoctorAvailability from "../models/doctorAvailability.model.js";
 import DoctorProfile from "../models/doctorProfile.model.js";
 import User from "../models/user.model.js";
-import { bookingSchema, cancelAppointmentSchema } from "../schemas.js";
+import {
+  bookingSchema,
+  cancelAppointmentSchema,
+  rescheduleAppointmentSchema,
+} from "../schemas.js";
 
 const timeToMinutes = (time) => {
   const [hours, minutes] = time.split(":").map(Number);
@@ -497,6 +501,182 @@ export const cancelAppointment = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Something went wrong while cancelling the appointment.",
+    });
+  }
+};
+
+export const rescheduleAppointment = async (req, res) => {
+  try {
+    if (req.user.role !== "patient") {
+      return res.status(403).json({
+        success: false,
+        message: "Only patients can reschedule appointments.",
+      });
+    }
+
+    const validation = rescheduleAppointmentSchema.safeParse(req.body);
+
+    if (!validation.success) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid rescheduling details.",
+        errors: validation.error.issues,
+      });
+    }
+
+    const { appointmentDate, startTime } = validation.data;
+
+    const date = new Date(`${appointmentDate}T00:00:00.000Z`);
+
+    if (
+      Number.isNaN(date.getTime()) ||
+      date.toISOString().slice(0, 10) !== appointmentDate
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid appointment date.",
+      });
+    }
+
+    const appointmentStart = new Date(
+      `${appointmentDate}T${startTime}:00.000Z`,
+    );
+
+    if (appointmentStart <= new Date()) {
+      return res.status(400).json({
+        success: false,
+        message: "New appointment must be in the future.",
+      });
+    }
+
+    const appointment = await Appointment.findOne({
+      _id: req.params.appointmentId,
+      patient: req.user._id,
+    });
+
+    if (!appointment) {
+      return res.status(404).json({
+        success: false,
+        message: "Appointment not found.",
+      });
+    }
+
+    if (!["pending", "confirmed"].includes(appointment.status)) {
+      return res.status(400).json({
+        success: false,
+        message: "This appointment cannot be rescheduled.",
+      });
+    }
+
+    const doctor = await User.findOne({
+      _id: appointment.doctor,
+      role: "doctor",
+      isActive: true,
+    });
+
+    if (!doctor) {
+      return res.status(404).json({
+        success: false,
+        message: "Doctor not found.",
+      });
+    }
+
+    const doctorProfile = await DoctorProfile.findOne({
+      user: appointment.doctor,
+      licenseVerificationStatus: "verified",
+    });
+
+    if (!doctorProfile) {
+      return res.status(403).json({
+        success: false,
+        message: "Doctor is not verified.",
+      });
+    }
+
+    const availability = await DoctorAvailability.findOne({
+      doctor: appointment.doctor,
+      isAcceptingAppointments: true,
+    });
+
+    if (!availability) {
+      return res.status(400).json({
+        success: false,
+        message: "Doctor is not accepting appointments.",
+      });
+    }
+
+    const dayName = getDayName(date);
+
+    const daySchedule = availability.weeklySchedule.find(
+      (item) => item.day === dayName,
+    );
+
+    if (!daySchedule || daySchedule.slots.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Doctor is not available on this day.",
+      });
+    }
+
+    const startMinutes = timeToMinutes(startTime);
+    const endMinutes = startMinutes + availability.slotDuration;
+
+    if (endMinutes > 1440) {
+      return res.status(400).json({
+        success: false,
+        message: "Appointment cannot extend beyond midnight.",
+      });
+    }
+
+    const endTime = `${String(Math.floor(endMinutes / 60)).padStart(2, "0")}:${String(endMinutes % 60).padStart(2, "0")}`;
+
+    const fitsAvailability = daySchedule.slots.some(
+      (slot) =>
+        startMinutes >= timeToMinutes(slot.startTime) &&
+        endMinutes <= timeToMinutes(slot.endTime),
+    );
+
+    if (!fitsAvailability) {
+      return res.status(400).json({
+        success: false,
+        message: "Requested time is outside the doctor availability.",
+      });
+    }
+
+    const conflict = await Appointment.findOne({
+      _id: { $ne: appointment._id },
+      appointmentDate: date,
+      status: { $in: ["pending", "confirmed"] },
+      $or: [{ doctor: appointment.doctor }, { patient: req.user._id }],
+      startTime: { $lt: endTime },
+      endTime: { $gt: startTime },
+    });
+
+    if (conflict) {
+      return res.status(409).json({
+        success: false,
+        message:
+          "The doctor or patient already has an appointment during this time.",
+      });
+    }
+
+    appointment.appointmentDate = date;
+    appointment.startTime = startTime;
+    appointment.endTime = endTime;
+
+    await appointment.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Appointment rescheduled successfully.",
+      appointment,
+    });
+  } catch (error) {
+    console.error("Reschedule appointment error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Something went wrong while rescheduling the appointment.",
     });
   }
 };
