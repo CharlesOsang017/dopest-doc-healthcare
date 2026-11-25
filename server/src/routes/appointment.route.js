@@ -6,6 +6,7 @@ import {
   cancelAppointment,
   completeAppointment,
   getDoctorAppointments,
+  getDoctorAppointmentStats,
   getMyAppointments,
   rejectAppointment,
   rescheduleAppointment,
@@ -21,4 +22,6 @@ router.patch("/:appointmentId/reject", protect, rejectAppointment);
 router.patch("/:appointmentId/cancel", protect, cancelAppointment);
 router.patch("/:appointmentId/reschedule", protect, rescheduleAppointment);
 router.patch("/:appointmentId/complete", protect, completeAppointment);
+router.get("/doctor/statistics", protect, getDoctorAppointmentStats);
+
 export default router;
