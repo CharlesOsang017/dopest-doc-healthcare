@@ -803,3 +803,79 @@ export const getDoctorAppointmentStats = async (req, res) => {
     });
   }
 };
+
+export const getPatientAppointmentStats = async (req, res) => {
+  try {
+    if (req.user.role !== "patient") {
+      return res.status(403).json({
+        success: false,
+        message: "Only patients can view their appointment statistics.",
+      });
+    }
+
+    const patientId = req.user._id;
+
+    const [
+      totalAppointments,
+      pendingAppointments,
+      confirmedAppointments,
+      completedAppointments,
+      rejectedAppointments,
+      cancelledAppointments,
+      upcomingAppointments,
+    ] = await Promise.all([
+      Appointment.countDocuments({ patient: patientId }),
+
+      Appointment.countDocuments({
+        patient: patientId,
+        status: "pending",
+      }),
+
+      Appointment.countDocuments({
+        patient: patientId,
+        status: "confirmed",
+      }),
+
+      Appointment.countDocuments({
+        patient: patientId,
+        status: "completed",
+      }),
+
+      Appointment.countDocuments({
+        patient: patientId,
+        status: "rejected",
+      }),
+
+      Appointment.countDocuments({
+        patient: patientId,
+        status: "cancelled",
+      }),
+
+      Appointment.countDocuments({
+        patient: patientId,
+        status: "confirmed",
+        appointmentDate: { $gte: new Date() },
+      }),
+    ]);
+
+    return res.status(200).json({
+      success: true,
+      statistics: {
+        totalAppointments,
+        pendingAppointments,
+        confirmedAppointments,
+        completedAppointments,
+        rejectedAppointments,
+        cancelledAppointments,
+        upcomingAppointments,
+      },
+    });
+  } catch (error) {
+    console.error("Patient appointment statistics error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Something went wrong while retrieving appointment statistics.",
+    });
+  }
+};
