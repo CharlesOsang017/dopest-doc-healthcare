@@ -2,6 +2,8 @@ import Appointment from "../models/appointment.model.js";
 import DoctorProfile from "../models/doctorProfile.model.js";
 import MedicalRecord from "../models/medicalRecord.model.js";
 import User from "../models/user.model.js";
+import mongoose from "mongoose";
+
 import { medicalRecordSchema } from "../schemas.js";
 
 export const createMedicalRecord = async (req, res) => {
