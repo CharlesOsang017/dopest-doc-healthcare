@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import Appointment from "../models/appointment.model.js";
 import DoctorAvailability from "../models/doctorAvailability.model.js";
 import DoctorProfile from "../models/doctorProfile.model.js";
@@ -25,6 +26,39 @@ const getDayName = (date) => {
   ];
 
   return days[date.getUTCDay()];
+};
+
+const getNairobiAppointmentDateTime = (date, time) => {
+  const [year, month, day] = date.split("-").map(Number);
+  const [hours, minutes] = time.split(":").map(Number);
+
+  // Nairobi is UTC+3.
+  return new Date(Date.UTC(year, month - 1, day, hours - 3, minutes));
+};
+
+const getNairobiCurrentDateTime = () => {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Africa/Nairobi",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(new Date());
+
+  const values = Object.fromEntries(
+    parts.map(({ type, value }) => [type, value]),
+  );
+
+  return {
+    date: `${values.year}-${values.month}-${values.day}`,
+    time: `${values.hour}:${values.minute}`,
+  };
+};
+
+const isValidAppointmentId = (appointmentId) => {
+  return mongoose.Types.ObjectId.isValid(appointmentId);
 };
 
 export const bookAppointment = async (req, res) => {
@@ -64,8 +98,9 @@ export const bookAppointment = async (req, res) => {
 
     const now = new Date();
 
-    const appointmentStart = new Date(
-      `${appointmentDate}T${startTime}:00.000Z`,
+    const appointmentStart = getNairobiAppointmentDateTime(
+      appointmentDate,
+      startTime,
     );
 
     if (appointmentStart <= now) {
@@ -246,9 +281,14 @@ export const getMyAppointments = async (req, res) => {
     const [appointments, total] = await Promise.all([
       Appointment.find(filter)
         .populate("doctor", "name")
-        .sort({ appointmentDate: -1, startTime: -1 })
+        .sort({
+          appointmentDate: -1,
+          startTime: -1,
+          _id: -1,
+        })
         .skip(skip)
-        .limit(limit),
+        .limit(limit)
+        .lean(),
 
       Appointment.countDocuments(filter),
     ]);
@@ -258,6 +298,9 @@ export const getMyAppointments = async (req, res) => {
       total,
       currentPage: page,
       totalPages: Math.ceil(total / limit),
+      pageSize: limit,
+      hasNextPage: page < Math.ceil(total / limit),
+      hasPreviousPage: page > 1,
       appointments,
     });
   } catch (error) {
@@ -314,9 +357,14 @@ export const getDoctorAppointments = async (req, res) => {
     const [appointments, total] = await Promise.all([
       Appointment.find(filter)
         .populate("patient", "name email phone")
-        .sort({ appointmentDate: 1, startTime: 1 })
+        .sort({
+          appointmentDate: 1,
+          startTime: 1,
+          _id: 1,
+        })
         .skip(skip)
-        .limit(limit),
+        .limit(limit)
+        .lean(),
 
       Appointment.countDocuments(filter),
     ]);
@@ -326,6 +374,9 @@ export const getDoctorAppointments = async (req, res) => {
       total,
       currentPage: page,
       totalPages: Math.ceil(total / limit),
+      pageSize: limit,
+      hasNextPage: page < Math.ceil(total / limit),
+      hasPreviousPage: page > 1,
       appointments,
     });
   } catch (error) {
@@ -340,6 +391,13 @@ export const getDoctorAppointments = async (req, res) => {
 
 export const approveAppointment = async (req, res) => {
   try {
+    if (!isValidAppointmentId(req.params.appointmentId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid appointment ID.",
+      });
+    }
+
     if (req.user.role !== "doctor") {
       return res.status(403).json({
         success: false,
@@ -366,12 +424,12 @@ export const approveAppointment = async (req, res) => {
       });
     }
 
-    // Recheck for conflicting appointments before confirmation.
+    // Check for overlapping pending or confirmed appointments.
     const conflict = await Appointment.findOne({
       _id: { $ne: appointment._id },
-      doctor: req.user._id,
       appointmentDate: appointment.appointmentDate,
-      status: "confirmed",
+      status: { $in: ["pending", "confirmed"] },
+      $or: [{ doctor: appointment.doctor }, { patient: appointment.patient }],
       startTime: { $lt: appointment.endTime },
       endTime: { $gt: appointment.startTime },
     });
@@ -379,17 +437,37 @@ export const approveAppointment = async (req, res) => {
     if (conflict) {
       return res.status(409).json({
         success: false,
-        message: "This time slot conflicts with another confirmed appointment.",
+        message:
+          "This appointment conflicts with another pending or confirmed appointment.",
       });
     }
 
-    appointment.status = "confirmed";
-    await appointment.save();
+    const updatedAppointment = await Appointment.findOneAndUpdate(
+      {
+        _id: appointment._id,
+        doctor: req.user._id,
+        status: "pending",
+      },
+      {
+        $set: { status: "confirmed" },
+      },
+      {
+        new: true,
+        runValidators: true,
+      },
+    );
+
+    if (!updatedAppointment) {
+      return res.status(409).json({
+        success: false,
+        message: "This appointment has already been updated.",
+      });
+    }
 
     return res.status(200).json({
       success: true,
       message: "Appointment approved successfully.",
-      appointment,
+      appointment: updatedAppointment,
     });
   } catch (error) {
     console.error("Approve appointment error:", error);
@@ -403,6 +481,13 @@ export const approveAppointment = async (req, res) => {
 
 export const rejectAppointment = async (req, res) => {
   try {
+    if (!isValidAppointmentId(req.params.appointmentId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid appointment ID.",
+      });
+    }
+
     if (req.user.role !== "doctor") {
       return res.status(403).json({
         success: false,
@@ -410,27 +495,39 @@ export const rejectAppointment = async (req, res) => {
       });
     }
 
-    const appointment = await Appointment.findOne({
-      _id: req.params.appointmentId,
-      doctor: req.user._id,
-    });
+    const appointment = await Appointment.findOneAndUpdate(
+      {
+        _id: req.params.appointmentId,
+        doctor: req.user._id,
+        status: "pending",
+      },
+      {
+        $set: { status: "rejected" },
+      },
+      {
+        new: true,
+        runValidators: true,
+      },
+    );
 
     if (!appointment) {
-      return res.status(404).json({
-        success: false,
-        message: "Appointment not found.",
+      const existingAppointment = await Appointment.exists({
+        _id: req.params.appointmentId,
+        doctor: req.user._id,
       });
-    }
 
-    if (appointment.status !== "pending") {
+      if (!existingAppointment) {
+        return res.status(404).json({
+          success: false,
+          message: "Appointment not found.",
+        });
+      }
+
       return res.status(400).json({
         success: false,
         message: "Only pending appointments can be rejected.",
       });
     }
-
-    appointment.status = "rejected";
-    await appointment.save();
 
     return res.status(200).json({
       success: true,
@@ -449,6 +546,13 @@ export const rejectAppointment = async (req, res) => {
 
 export const cancelAppointment = async (req, res) => {
   try {
+    if (!isValidAppointmentId(req.params.appointmentId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid appointment ID.",
+      });
+    }
+
     if (req.user.role !== "patient") {
       return res.status(403).json({
         success: false,
@@ -485,15 +589,47 @@ export const cancelAppointment = async (req, res) => {
       });
     }
 
-    appointment.status = "cancelled";
-    appointment.cancellationReason = validation.data.reason;
+    const appointmentStart = getNairobiAppointmentDateTime(
+      appointment.appointmentDate.toISOString().slice(0, 10),
+      appointment.startTime,
+    );
 
-    await appointment.save();
+    if (appointmentStart <= new Date()) {
+      return res.status(400).json({
+        success: false,
+        message: "Appointments cannot be cancelled after they have started.",
+      });
+    }
+
+    const updatedAppointment = await Appointment.findOneAndUpdate(
+      {
+        _id: appointment._id,
+        patient: req.user._id,
+        status: { $in: ["pending", "confirmed"] },
+      },
+      {
+        $set: {
+          status: "cancelled",
+          cancellationReason: validation.data.reason,
+        },
+      },
+      {
+        new: true,
+        runValidators: true,
+      },
+    );
+
+    if (!updatedAppointment) {
+      return res.status(409).json({
+        success: false,
+        message: "This appointment has already been updated.",
+      });
+    }
 
     return res.status(200).json({
       success: true,
       message: "Appointment cancelled successfully.",
-      appointment,
+      appointment: updatedAppointment,
     });
   } catch (error) {
     console.error("Cancel appointment error:", error);
@@ -507,6 +643,13 @@ export const cancelAppointment = async (req, res) => {
 
 export const rescheduleAppointment = async (req, res) => {
   try {
+    if (!isValidAppointmentId(req.params.appointmentId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid appointment ID.",
+      });
+    }
+
     if (req.user.role !== "patient") {
       return res.status(403).json({
         success: false,
@@ -538,8 +681,9 @@ export const rescheduleAppointment = async (req, res) => {
       });
     }
 
-    const appointmentStart = new Date(
-      `${appointmentDate}T${startTime}:00.000Z`,
+    const appointmentStart = getNairobiAppointmentDateTime(
+      appointmentDate,
+      startTime,
     );
 
     if (appointmentStart <= new Date()) {
@@ -565,6 +709,19 @@ export const rescheduleAppointment = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: "This appointment cannot be rescheduled.",
+      });
+    }
+
+    // Prevent rescheduling an appointment that has already started.
+    const existingAppointmentStart = getNairobiAppointmentDateTime(
+      appointment.appointmentDate.toISOString().slice(0, 10),
+      appointment.startTime,
+    );
+
+    if (existingAppointmentStart <= new Date()) {
+      return res.status(400).json({
+        success: false,
+        message: "Appointments cannot be rescheduled after they have started.",
       });
     }
 
@@ -660,16 +817,41 @@ export const rescheduleAppointment = async (req, res) => {
       });
     }
 
-    appointment.appointmentDate = date;
-    appointment.startTime = startTime;
-    appointment.endTime = endTime;
+    const updatedAppointment = await Appointment.findOneAndUpdate(
+      {
+        _id: appointment._id,
+        patient: req.user._id,
+        status: { $in: ["pending", "confirmed"] },
+        __v: appointment.__v,
+      },
+      {
+        $set: {
+          appointmentDate: date,
+          startTime,
+          endTime,
+        },
+        $inc: {
+          __v: 1,
+        },
+      },
+      {
+        new: true,
+        runValidators: true,
+      },
+    );
 
-    await appointment.save();
+    if (!updatedAppointment) {
+      return res.status(409).json({
+        success: false,
+        message:
+          "This appointment has already been updated. Please refresh and try again.",
+      });
+    }
 
     return res.status(200).json({
       success: true,
       message: "Appointment rescheduled successfully.",
-      appointment,
+      appointment: updatedAppointment,
     });
   } catch (error) {
     console.error("Reschedule appointment error:", error);
@@ -683,6 +865,13 @@ export const rescheduleAppointment = async (req, res) => {
 
 export const completeAppointment = async (req, res) => {
   try {
+    if (!isValidAppointmentId(req.params.appointmentId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid appointment ID.",
+      });
+    }
+
     if (req.user.role !== "doctor") {
       return res.status(403).json({
         success: false,
@@ -709,14 +898,46 @@ export const completeAppointment = async (req, res) => {
       });
     }
 
-    appointment.status = "completed";
+    // Calculate the scheduled appointment end time in Nairobi.
+    const appointmentEnd = getNairobiAppointmentDateTime(
+      appointment.appointmentDate.toISOString().slice(0, 10),
+      appointment.endTime,
+    );
 
-    await appointment.save();
+    if (appointmentEnd > new Date()) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "An appointment cannot be completed before its scheduled end time.",
+      });
+    }
+
+    const updatedAppointment = await Appointment.findOneAndUpdate(
+      {
+        _id: appointment._id,
+        doctor: req.user._id,
+        status: "confirmed",
+      },
+      {
+        $set: { status: "completed" },
+      },
+      {
+        new: true,
+        runValidators: true,
+      },
+    );
+
+    if (!updatedAppointment) {
+      return res.status(409).json({
+        success: false,
+        message: "This appointment has already been updated.",
+      });
+    }
 
     return res.status(200).json({
       success: true,
       message: "Appointment marked as completed.",
-      appointment,
+      appointment: updatedAppointment,
     });
   } catch (error) {
     console.error("Complete appointment error:", error);
@@ -738,6 +959,9 @@ export const getDoctorAppointmentStats = async (req, res) => {
     }
 
     const doctorId = req.user._id;
+    const { date, time } = getNairobiCurrentDateTime();
+
+    const todayMarker = new Date(`${date}T00:00:00.000Z`);
 
     const [
       totalAppointments,
@@ -778,7 +1002,15 @@ export const getDoctorAppointmentStats = async (req, res) => {
       Appointment.countDocuments({
         doctor: doctorId,
         status: "confirmed",
-        appointmentDate: { $gte: new Date() },
+        $or: [
+          {
+            appointmentDate: { $gt: todayMarker },
+          },
+          {
+            appointmentDate: todayMarker,
+            startTime: { $gt: time },
+          },
+        ],
       }),
     ]);
 
@@ -814,6 +1046,9 @@ export const getPatientAppointmentStats = async (req, res) => {
     }
 
     const patientId = req.user._id;
+    const { date, time } = getNairobiCurrentDateTime();
+
+    const todayMarker = new Date(`${date}T00:00:00.000Z`);
 
     const [
       totalAppointments,
@@ -854,7 +1089,15 @@ export const getPatientAppointmentStats = async (req, res) => {
       Appointment.countDocuments({
         patient: patientId,
         status: "confirmed",
-        appointmentDate: { $gte: new Date() },
+        $or: [
+          {
+            appointmentDate: { $gt: todayMarker },
+          },
+          {
+            appointmentDate: todayMarker,
+            startTime: { $gt: time },
+          },
+        ],
       }),
     ]);
 
