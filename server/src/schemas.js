@@ -136,24 +136,66 @@ export const bookingSchema = z
   })
   .strict();
 
-export const cancelAppointmentSchema = z.object({
+export const cancelAppointmentSchema = z
+  .object({
     reason: z.string().trim().min(5).max(500),
-  }).strict();
+  })
+  .strict();
 
 export const rescheduleAppointmentSchema = z
-    .object({
-      appointmentDate: z
-        .string()
-        .regex(
-          /^\d{4}-\d{2}-\d{2}$/,
-          "Appointment date must use YYYY-MM-DD format.",
-        ),
-      startTime: z
-        .string()
-        .regex(
-          /^([01]\d|2[0-3]):([0-5]\d)$/,
-          "Start time must use HH:mm format.",
-        ),
-    })
-    .strict();
-  
+  .object({
+    appointmentDate: z
+      .string()
+      .regex(
+        /^\d{4}-\d{2}-\d{2}$/,
+        "Appointment date must use YYYY-MM-DD format.",
+      ),
+    startTime: z
+      .string()
+      .regex(
+        /^([01]\d|2[0-3]):([0-5]\d)$/,
+        "Start time must use HH:mm format.",
+      ),
+  })
+  .strict();
+
+export const medicalRecordSchema = z.object({
+  patientId: z
+    .string()
+    .refine(
+      (value) => mongoose.Types.ObjectId.isValid(value),
+      "Invalid patient ID.",
+    ),
+
+  appointmentId: z
+    .string()
+    .refine(
+      (value) => mongoose.Types.ObjectId.isValid(value),
+      "Invalid appointment ID.",
+    )
+    .optional(),
+
+  recordType: z.enum([
+    "consultation",
+    "diagnosis",
+    "lab-result",
+    "imaging",
+    "procedure",
+    "vaccination",
+    "other",
+  ]),
+
+  title: z.string().trim().min(3).max(200),
+
+  description: z.string().trim().max(3000).optional(),
+
+  diagnosis: z.string().trim().max(2000).optional(),
+
+  symptoms: z.array(z.string().trim().min(1).max(200)).max(30).optional(),
+
+  treatment: z.string().trim().max(3000).optional(),
+
+  notes: z.string().trim().max(3000).optional(),
+
+  recordedAt: z.coerce.date().optional(),
+});
