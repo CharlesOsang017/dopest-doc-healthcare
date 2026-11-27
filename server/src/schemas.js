@@ -233,3 +233,46 @@ export const updateMedicalRecordSchema = z
     (data) => Object.keys(data).length > 0,
     "Provide at least one field to update.",
   );
+
+export const prescriptionSchema = z
+  .object({
+    patientId: z
+      .string()
+      .refine(
+        (value) => mongoose.Types.ObjectId.isValid(value),
+        "Invalid patient ID.",
+      ),
+    appointmentId: z
+      .string()
+      .refine(
+        (value) => mongoose.Types.ObjectId.isValid(value),
+        "Invalid appointment ID.",
+      )
+      .optional(),
+    medicalRecordId: z
+      .string()
+      .refine(
+        (value) => mongoose.Types.ObjectId.isValid(value),
+        "Invalid medical record ID.",
+      )
+      .optional(),
+    items: z
+      .array(
+        z
+          .object({
+            medicationName: z.string().trim().min(2).max(200),
+            strength: z.string().trim().max(100).optional(),
+            dosage: z.string().trim().min(1).max(200),
+            route: z.string().trim().max(100).optional(),
+            frequency: z.string().trim().min(1).max(200),
+            duration: z.string().trim().min(1).max(100),
+            quantity: z.number().int().min(1),
+            instructions: z.string().trim().max(1000).optional(),
+          })
+          .strict(),
+      )
+      .min(1)
+      .max(30),
+    notes: z.string().trim().max(2000).optional(),
+  })
+  .strict();
