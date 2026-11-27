@@ -487,3 +487,63 @@ export const downloadPrescriptionPdf = async (req, res) => {
     res.destroy(error);
   }
 };
+
+export const verifyPrescription = async (req, res) => {
+  try {
+    if (req.user.role !== "chemist") {
+      return res.status(403).json({
+        success: false,
+        message: "Only authorized pharmacy accounts can verify prescriptions.",
+      });
+    }
+
+    const { prescriptionId } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(prescriptionId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid prescription ID.",
+      });
+    }
+
+    const prescription = await Prescription.findById(prescriptionId)
+      .populate("patient", "name")
+      .populate("doctor", "name")
+      .lean();
+
+    if (!prescription) {
+      return res.status(404).json({
+        success: false,
+        message: "Prescription not found.",
+      });
+    }
+
+    if (prescription.status !== "issued") {
+      return res.status(200).json({
+        success: true,
+        valid: false,
+        message: "This prescription has been cancelled.",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      valid: true,
+      message: "Prescription is valid.",
+      prescription: {
+        id: prescription._id,
+        patient: prescription.patient,
+        doctor: prescription.doctor,
+        items: prescription.items,
+        issuedAt: prescription.issuedAt,
+      },
+    });
+  } catch (error) {
+    console.error("Verify prescription error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to verify prescription.",
+    });
+  }
+};

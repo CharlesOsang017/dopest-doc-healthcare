@@ -8,6 +8,7 @@ import {
   getMyPrescriptions,
   getPrescriptionById,
   getPrescriptionStatistics,
+  verifyPrescription,
 } from "../controllers/prescription.controller.js";
 
 const router = express.Router();
@@ -19,4 +20,5 @@ router.get("/statistics", protect, getPrescriptionStatistics);
 router.get("/:prescriptionId", protect, getPrescriptionById);
 router.patch("/:prescriptionId/cancel", protect, cancelPrescription);
 router.get("/:prescriptionId/pdf", protect, downloadPrescriptionPdf);
+router.get("/:prescriptionId/verify", protect, verifyPrescription);
 export default router;
