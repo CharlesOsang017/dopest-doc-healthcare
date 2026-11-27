@@ -5,6 +5,7 @@ import Prescription from "../models/prescription.model.js";
 import User from "../models/user.model.js";
 import { prescriptionSchema } from "../schemas.js";
 import mongoose from "mongoose";
+import { z } from "zod";
 
 export const createPrescription = async (req, res) => {
   try {
@@ -300,6 +301,95 @@ export const getPrescriptionById = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Failed to retrieve prescription.",
+    });
+  }
+};
+
+export const cancelPrescription = async (req, res) => {
+  try {
+    if (req.user.role !== "doctor") {
+      return res.status(403).json({
+        success: false,
+        message: "Only doctors can cancel prescriptions.",
+      });
+    }
+
+    const { prescriptionId } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(prescriptionId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid prescription ID.",
+      });
+    }
+
+    const validation = z
+      .object({
+        cancellationReason: z.string().trim().min(3).max(1000),
+      })
+      .strict()
+      .safeParse(req.body);
+
+    if (!validation.success) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid cancellation information.",
+        errors: validation.error.issues.map((issue) => ({
+          field: issue.path.join("."),
+          message: issue.message,
+        })),
+      });
+    }
+
+    const prescription = await Prescription.findOneAndUpdate(
+      {
+        _id: prescriptionId,
+        doctor: req.user._id,
+        status: "issued",
+      },
+      {
+        $set: {
+          status: "cancelled",
+          cancelledAt: new Date(),
+          cancellationReason: validation.data.cancellationReason,
+        },
+      },
+      {
+        new: true,
+        runValidators: true,
+      },
+    );
+
+    if (!prescription) {
+      const existingPrescription = await Prescription.exists({
+        _id: prescriptionId,
+        doctor: req.user._id,
+      });
+
+      if (!existingPrescription) {
+        return res.status(404).json({
+          success: false,
+          message: "Prescription not found.",
+        });
+      }
+
+      return res.status(400).json({
+        success: false,
+        message: "Only issued prescriptions can be cancelled.",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Prescription cancelled successfully.",
+      prescription,
+    });
+  } catch (error) {
+    console.error("Cancel prescription error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to cancel prescription.",
     });
   }
 };
