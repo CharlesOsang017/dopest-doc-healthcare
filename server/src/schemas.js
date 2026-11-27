@@ -200,7 +200,6 @@ export const medicalRecordSchema = z.object({
   recordedAt: z.coerce.date().optional(),
 });
 
-
 export const updateMedicalRecordSchema = z
   .object({
     recordType: z

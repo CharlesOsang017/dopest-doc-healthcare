@@ -3,9 +3,10 @@ import DoctorProfile from "../models/doctorProfile.model.js";
 import MedicalRecord from "../models/medicalRecord.model.js";
 import User from "../models/user.model.js";
 import mongoose from "mongoose";
-
+import { z } from "zod";
 import { medicalRecordSchema, updateMedicalRecordSchema } from "../schemas.js";
 import MedicalRecordAudit from "../models/medicalRecordAudit.model.js";
+import MedicalRecordAddendum from "../models/medicalRecordAddendum.model.js";
 
 export const createMedicalRecord = async (req, res) => {
   try {
@@ -532,6 +533,162 @@ export const getMedicalRecordAuditHistory = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Failed to retrieve medical record audit history.",
+    });
+  }
+};
+
+export const createMedicalRecordAddendum = async (req, res) => {
+  try {
+    if (req.user.role !== "doctor") {
+      return res.status(403).json({
+        success: false,
+        message: "Only doctors can add medical record addenda.",
+      });
+    }
+
+    const { recordId } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(recordId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid medical record ID.",
+      });
+    }
+
+    const validation = z
+      .object({
+        content: z.string().trim().min(3).max(3000),
+      })
+      .strict()
+      .safeParse(req.body);
+
+    if (!validation.success) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid addendum data.",
+        errors: validation.error.issues.map((issue) => ({
+          field: issue.path.join("."),
+          message: issue.message,
+        })),
+      });
+    }
+
+    const doctorProfile = await DoctorProfile.findOne({
+      user: req.user._id,
+      licenseVerificationStatus: "verified",
+    });
+
+    if (!doctorProfile) {
+      return res.status(403).json({
+        success: false,
+        message: "Your doctor profile must be verified.",
+      });
+    }
+
+    const medicalRecord = await MedicalRecord.findOne({
+      _id: recordId,
+      doctor: req.user._id,
+    });
+
+    if (!medicalRecord) {
+      return res.status(404).json({
+        success: false,
+        message: "Medical record not found.",
+      });
+    }
+
+    const addendum = await MedicalRecordAddendum.create({
+      medicalRecord: medicalRecord._id,
+      doctor: req.user._id,
+      content: validation.data.content,
+    });
+
+    await MedicalRecordAudit.create({
+      medicalRecord: medicalRecord._id,
+      performedBy: req.user._id,
+      action: "updated",
+      changes: {
+        type: "addendum",
+        addendumId: addendum._id,
+      },
+      ipAddress: req.ip || null,
+      userAgent: req.get("user-agent") || null,
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: "Medical record addendum created successfully.",
+      addendum,
+    });
+  } catch (error) {
+    console.error("Create medical record addendum error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to create medical record addendum.",
+    });
+  }
+};
+
+export const getMedicalRecordAddenda = async (req, res) => {
+  try {
+    const { recordId } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(recordId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid medical record ID.",
+      });
+    }
+
+    const medicalRecord = await MedicalRecord.findOne({
+      _id: recordId,
+      $or: [{ patient: req.user._id }, { doctor: req.user._id }],
+    }).select("_id");
+
+    if (!medicalRecord) {
+      return res.status(404).json({
+        success: false,
+        message: "Medical record not found.",
+      });
+    }
+
+    const page = Math.max(1, Number.parseInt(req.query.page, 10) || 1);
+    const limit = Math.min(
+      50,
+      Math.max(1, Number.parseInt(req.query.limit, 10) || 10),
+    );
+    const skip = (page - 1) * limit;
+
+    const [addenda, total] = await Promise.all([
+      MedicalRecordAddendum.find({
+        medicalRecord: recordId,
+      })
+        .populate("doctor", "name")
+        .sort({ createdAt: -1, _id: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+
+      MedicalRecordAddendum.countDocuments({
+        medicalRecord: recordId,
+      }),
+    ]);
+
+    return res.status(200).json({
+      success: true,
+      total,
+      currentPage: page,
+      totalPages: Math.ceil(total / limit),
+      pageSize: limit,
+      addenda,
+    });
+  } catch (error) {
+    console.error("Get medical record addenda error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to retrieve medical record addenda.",
     });
   }
 };
