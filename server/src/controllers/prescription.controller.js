@@ -7,6 +7,7 @@ import { prescriptionSchema } from "../schemas.js";
 import mongoose from "mongoose";
 import { z } from "zod";
 import generatePrescriptionPdf from "../utils/prescriptionPDF.js";
+import { randomBytes, createHash } from "crypto";
 
 export const createPrescription = async (req, res) => {
   try {
@@ -112,6 +113,12 @@ export const createPrescription = async (req, res) => {
       });
     }
 
+    const verificationCode = randomBytes(16).toString("base64url");
+
+    const verificationCodeHash = createHash("sha256")
+      .update(verificationCode)
+      .digest("hex");
+
     const prescription = await Prescription.create({
       patient: patientId,
       doctor: req.user._id,
@@ -119,12 +126,14 @@ export const createPrescription = async (req, res) => {
       medicalRecord: linkedMedicalRecord?._id || null,
       items,
       notes: notes || "",
+      verificationCodeHash,
     });
 
     return res.status(201).json({
       success: true,
       message: "Prescription issued successfully.",
       prescription,
+      verificationCode,
     });
   } catch (error) {
     console.error("Create prescription error:", error);
@@ -497,16 +506,27 @@ export const verifyPrescription = async (req, res) => {
       });
     }
 
-    const { prescriptionId } = req.params;
+    const validation = z
+      .object({
+        verificationCode: z.string().trim().min(10).max(100),
+      })
+      .strict()
+      .safeParse(req.body);
 
-    if (!mongoose.Types.ObjectId.isValid(prescriptionId)) {
+    if (!validation.success) {
       return res.status(400).json({
         success: false,
-        message: "Invalid prescription ID.",
+        message: "A valid verification code is required.",
       });
     }
 
-    const prescription = await Prescription.findById(prescriptionId)
+    const verificationCodeHash = createHash("sha256")
+      .update(validation.data.verificationCode)
+      .digest("hex");
+
+    const prescription = await Prescription.findOne({
+      verificationCodeHash,
+    })
       .populate("patient", "name")
       .populate("doctor", "name")
       .lean();

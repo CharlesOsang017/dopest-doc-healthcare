@@ -17,8 +17,9 @@ router.post("/", protect, createPrescription);
 router.get("/my", protect, getMyPrescriptions);
 router.get("/doctor", protect, getDoctorPrescriptions);
 router.get("/statistics", protect, getPrescriptionStatistics);
+router.post("/verify", protect, verifyPrescription);
 router.get("/:prescriptionId", protect, getPrescriptionById);
 router.patch("/:prescriptionId/cancel", protect, cancelPrescription);
 router.get("/:prescriptionId/pdf", protect, downloadPrescriptionPdf);
-router.get("/:prescriptionId/verify", protect, verifyPrescription);
+
 export default router;

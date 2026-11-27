@@ -112,8 +112,21 @@ const prescriptionSchema = new mongoose.Schema(
       maxlength: 1000,
       default: "",
     },
+    verificationCodeHash: {
+      type: String,
+      select: false,
+    },
   },
   { timestamps: true },
+);
+prescriptionSchema.index(
+  { verificationCodeHash: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      verificationCodeHash: { $type: "string" },
+    },
+  },
 );
 
 prescriptionSchema.index({ patient: 1, issuedAt: -1 });
