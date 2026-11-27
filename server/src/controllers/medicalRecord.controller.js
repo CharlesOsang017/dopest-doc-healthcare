@@ -5,6 +5,7 @@ import User from "../models/user.model.js";
 import mongoose from "mongoose";
 
 import { medicalRecordSchema, updateMedicalRecordSchema } from "../schemas.js";
+import MedicalRecordAudit from "../models/medicalRecordAudit.model.js";
 
 export const createMedicalRecord = async (req, res) => {
   try {
@@ -94,6 +95,17 @@ export const createMedicalRecord = async (req, res) => {
       doctor: req.user._id,
       appointment: linkedAppointmentId,
       ...recordData,
+    });
+
+    await MedicalRecordAudit.create({
+      medicalRecord: medicalRecord._id,
+      performedBy: req.user._id,
+      action: "created",
+      changes: {
+        fields: Object.keys(recordData),
+      },
+      ipAddress: req.ip || null,
+      userAgent: req.get("user-agent") || null,
     });
 
     return res.status(201).json({
@@ -334,9 +346,22 @@ export const updateMedicalRecord = async (req, res) => {
       });
     }
 
+    const updatedFields = Object.keys(validation.data);
+
     Object.assign(medicalRecord, validation.data);
 
     await medicalRecord.save();
+
+    await MedicalRecordAudit.create({
+      medicalRecord: medicalRecord._id,
+      performedBy: req.user._id,
+      action: "updated",
+      changes: {
+        fields: updatedFields,
+      },
+      ipAddress: req.ip || null,
+      userAgent: req.get("user-agent") || null,
+    });
 
     return res.status(200).json({
       success: true,
@@ -408,6 +433,17 @@ export const archiveMedicalRecord = async (req, res) => {
           "Medical record not found, already archived, or you do not have permission to archive it.",
       });
     }
+
+    await MedicalRecordAudit.create({
+      medicalRecord: medicalRecord._id,
+      performedBy: req.user._id,
+      action: "archived",
+      changes: {
+        fields: ["isArchived"],
+      },
+      ipAddress: req.ip || null,
+      userAgent: req.get("user-agent") || null,
+    });
 
     return res.status(200).json({
       success: true,
