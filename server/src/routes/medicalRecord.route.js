@@ -3,6 +3,7 @@ import { protect } from "../middleware/auth.middleware.js";
 import {
   archiveMedicalRecord,
   createMedicalRecord,
+  getMedicalRecordAuditHistory,
   getMyMedicalRecords,
   getPatientMedicalRecords,
   updateMedicalRecord,
@@ -15,4 +16,6 @@ router.get("/my", protect, getMyMedicalRecords);
 router.get("/patient/:patientId", protect, getPatientMedicalRecords);
 router.patch("/:recordId", protect, updateMedicalRecord);
 router.patch("/:recordId/archive", protect, archiveMedicalRecord);
+router.get("/:recordId/audit", protect, getMedicalRecordAuditHistory);
+
 export default router;

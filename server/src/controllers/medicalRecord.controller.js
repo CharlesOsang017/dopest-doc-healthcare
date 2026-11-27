@@ -459,3 +459,79 @@ export const archiveMedicalRecord = async (req, res) => {
     });
   }
 };
+
+export const getMedicalRecordAuditHistory = async (req, res) => {
+  try {
+    if (req.user.role !== "doctor") {
+      return res.status(403).json({
+        success: false,
+        message: "Only doctors can view medical record audit history.",
+      });
+    }
+
+    const { recordId } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(recordId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid medical record ID.",
+      });
+    }
+
+    const medicalRecord = await MedicalRecord.findOne({
+      _id: recordId,
+      doctor: req.user._id,
+    }).select("_id");
+
+    if (!medicalRecord) {
+      return res.status(404).json({
+        success: false,
+        message: "Medical record not found.",
+      });
+    }
+
+    const page = Math.max(1, Number.parseInt(req.query.page, 10) || 1);
+    const limit = Math.min(
+      50,
+      Math.max(1, Number.parseInt(req.query.limit, 10) || 10),
+    );
+    const skip = (page - 1) * limit;
+
+    const [auditHistory, total] = await Promise.all([
+      MedicalRecordAudit.find({
+        medicalRecord: recordId,
+      })
+        .populate("performedBy", "name role")
+        .sort({ createdAt: -1, _id: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+
+      MedicalRecordAudit.countDocuments({
+        medicalRecord: recordId,
+      }),
+    ]);
+
+    return res.status(200).json({
+      success: true,
+      total,
+      currentPage: page,
+      totalPages: Math.ceil(total / limit),
+      pageSize: limit,
+      auditHistory: auditHistory.map((entry) => ({
+        _id: entry._id,
+        action: entry.action,
+        changes: entry.changes,
+        performedBy: entry.performedBy,
+        createdAt: entry.createdAt,
+      })),
+    });
+  } catch (error) {
+    console.error("Get medical record audit history error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to retrieve medical record audit history.",
+    });
+  }
+};
