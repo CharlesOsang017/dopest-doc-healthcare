@@ -199,3 +199,38 @@ export const medicalRecordSchema = z.object({
 
   recordedAt: z.coerce.date().optional(),
 });
+
+
+export const updateMedicalRecordSchema = z
+  .object({
+    recordType: z
+      .enum([
+        "consultation",
+        "diagnosis",
+        "lab-result",
+        "imaging",
+        "procedure",
+        "vaccination",
+        "other",
+      ])
+      .optional(),
+
+    title: z.string().trim().min(3).max(200).optional(),
+
+    description: z.string().trim().max(3000).optional(),
+
+    diagnosis: z.string().trim().max(2000).optional(),
+
+    symptoms: z.array(z.string().trim().min(1).max(200)).max(30).optional(),
+
+    treatment: z.string().trim().max(3000).optional(),
+
+    notes: z.string().trim().max(3000).optional(),
+
+    recordedAt: z.coerce.date().optional(),
+  })
+  .strict()
+  .refine(
+    (data) => Object.keys(data).length > 0,
+    "Provide at least one field to update.",
+  );

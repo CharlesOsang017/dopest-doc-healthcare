@@ -4,7 +4,7 @@ import MedicalRecord from "../models/medicalRecord.model.js";
 import User from "../models/user.model.js";
 import mongoose from "mongoose";
 
-import { medicalRecordSchema } from "../schemas.js";
+import { medicalRecordSchema, updateMedicalRecordSchema } from "../schemas.js";
 
 export const createMedicalRecord = async (req, res) => {
   try {
@@ -275,6 +275,80 @@ export const getPatientMedicalRecords = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Something went wrong while retrieving patient medical records.",
+    });
+  }
+};
+
+export const updateMedicalRecord = async (req, res) => {
+  try {
+    if (req.user.role !== "doctor") {
+      return res.status(403).json({
+        success: false,
+        message: "Only doctors can update medical records.",
+      });
+    }
+
+    const { recordId } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(recordId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid medical record ID.",
+      });
+    }
+
+    const validation = updateMedicalRecordSchema.safeParse(req.body);
+
+    if (!validation.success) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid medical record information.",
+        errors: validation.error.flatten(),
+      });
+    }
+
+    const doctorProfile = await DoctorProfile.findOne({
+      user: req.user._id,
+      licenseVerificationStatus: "verified",
+    }).select("_id");
+
+    if (!doctorProfile) {
+      return res.status(403).json({
+        success: false,
+        message:
+          "Your medical license must be verified to update medical records.",
+      });
+    }
+
+    const medicalRecord = await MedicalRecord.findOne({
+      _id: recordId,
+      doctor: req.user._id,
+      isArchived: false,
+    });
+
+    if (!medicalRecord) {
+      return res.status(404).json({
+        success: false,
+        message:
+          "Medical record not found or you do not have permission to update it.",
+      });
+    }
+
+    Object.assign(medicalRecord, validation.data);
+
+    await medicalRecord.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Medical record updated successfully.",
+      medicalRecord,
+    });
+  } catch (error) {
+    console.error("Update medical record error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Something went wrong while updating the medical record.",
     });
   }
 };
