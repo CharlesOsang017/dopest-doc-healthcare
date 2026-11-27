@@ -6,6 +6,7 @@ import User from "../models/user.model.js";
 import { prescriptionSchema } from "../schemas.js";
 import mongoose from "mongoose";
 import { z } from "zod";
+import generatePrescriptionPdf from "../utils/prescriptionPDF.js";
 
 export const createPrescription = async (req, res) => {
   try {
@@ -429,5 +430,60 @@ export const getPrescriptionStatistics = async (req, res) => {
       success: false,
       message: "Failed to retrieve prescription statistics.",
     });
+  }
+};
+
+export const downloadPrescriptionPdf = async (req, res) => {
+  try {
+    const { prescriptionId } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(prescriptionId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid prescription ID.",
+      });
+    }
+
+    const prescription = await Prescription.findOne({
+      _id: prescriptionId,
+      $or: [{ patient: req.user._id }, { doctor: req.user._id }],
+    })
+      .populate("patient", "name")
+      .populate("doctor", "name")
+      .lean();
+
+    if (!prescription) {
+      return res.status(404).json({
+        success: false,
+        message: "Prescription not found.",
+      });
+    }
+
+    if (prescription.status !== "issued") {
+      return res.status(400).json({
+        success: false,
+        message: "Cancelled prescriptions cannot be downloaded.",
+      });
+    }
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="prescription-${prescription._id}.pdf"`,
+    );
+    res.setHeader("Cache-Control", "private, no-store");
+
+    generatePrescriptionPdf(prescription, res);
+  } catch (error) {
+    console.error("Download prescription PDF error:", error);
+
+    if (!res.headersSent) {
+      return res.status(500).json({
+        success: false,
+        message: "Failed to generate prescription PDF.",
+      });
+    }
+
+    res.destroy(error);
   }
 };
