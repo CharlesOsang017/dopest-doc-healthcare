@@ -352,3 +352,74 @@ export const updateMedicalRecord = async (req, res) => {
     });
   }
 };
+
+export const archiveMedicalRecord = async (req, res) => {
+  try {
+    if (req.user.role !== "doctor") {
+      return res.status(403).json({
+        success: false,
+        message: "Only doctors can archive medical records.",
+      });
+    }
+
+    const { recordId } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(recordId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid medical record ID.",
+      });
+    }
+
+    const doctorProfile = await DoctorProfile.findOne({
+      user: req.user._id,
+      licenseVerificationStatus: "verified",
+    }).select("_id");
+
+    if (!doctorProfile) {
+      return res.status(403).json({
+        success: false,
+        message:
+          "Your medical license must be verified to archive medical records.",
+      });
+    }
+
+    const medicalRecord = await MedicalRecord.findOneAndUpdate(
+      {
+        _id: recordId,
+        doctor: req.user._id,
+        isArchived: false,
+      },
+      {
+        $set: {
+          isArchived: true,
+        },
+      },
+      {
+        new: true,
+        runValidators: true,
+      },
+    );
+
+    if (!medicalRecord) {
+      return res.status(404).json({
+        success: false,
+        message:
+          "Medical record not found, already archived, or you do not have permission to archive it.",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Medical record archived successfully.",
+      medicalRecord,
+    });
+  } catch (error) {
+    console.error("Archive medical record error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Something went wrong while archiving the medical record.",
+    });
+  }
+};
