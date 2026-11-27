@@ -393,3 +393,41 @@ export const cancelPrescription = async (req, res) => {
     });
   }
 };
+
+export const getPrescriptionStatistics = async (req, res) => {
+  try {
+    if (!["doctor", "patient"].includes(req.user.role)) {
+      return res.status(403).json({
+        success: false,
+        message: "Only doctors and patients can view prescription statistics.",
+      });
+    }
+
+    const filter =
+      req.user.role === "doctor"
+        ? { doctor: req.user._id }
+        : { patient: req.user._id };
+
+    const [total, issued, cancelled] = await Promise.all([
+      Prescription.countDocuments(filter),
+      Prescription.countDocuments({ ...filter, status: "issued" }),
+      Prescription.countDocuments({ ...filter, status: "cancelled" }),
+    ]);
+
+    return res.status(200).json({
+      success: true,
+      statistics: {
+        total,
+        issued,
+        cancelled,
+      },
+    });
+  } catch (error) {
+    console.error("Get prescription statistics error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to retrieve prescription statistics.",
+    });
+  }
+};
