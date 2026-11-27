@@ -4,6 +4,7 @@ import MedicalRecord from "../models/medicalRecord.model.js";
 import Prescription from "../models/prescription.model.js";
 import User from "../models/user.model.js";
 import { prescriptionSchema } from "../schemas.js";
+import mongoose from "mongoose";
 
 export const createPrescription = async (req, res) => {
   try {
@@ -193,6 +194,112 @@ export const getMyPrescriptions = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Failed to retrieve prescriptions.",
+    });
+  }
+};
+
+export const getDoctorPrescriptions = async (req, res) => {
+  try {
+    if (req.user.role !== "doctor") {
+      return res.status(403).json({
+        success: false,
+        message: "Only doctors can view their prescription history.",
+      });
+    }
+
+    const page = Math.max(1, Number.parseInt(req.query.page, 10) || 1);
+    const limit = Math.min(
+      50,
+      Math.max(1, Number.parseInt(req.query.limit, 10) || 10),
+    );
+    const skip = (page - 1) * limit;
+
+    const filter = {
+      doctor: req.user._id,
+    };
+
+    if (req.query.status) {
+      if (!["issued", "cancelled"].includes(req.query.status)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid prescription status.",
+        });
+      }
+
+      filter.status = req.query.status;
+    }
+
+    const [prescriptions, total] = await Promise.all([
+      Prescription.find(filter)
+        .populate("patient", "name email phone")
+        .populate("appointment", "appointmentDate startTime endTime status")
+        .populate("medicalRecord", "recordType title recordedAt")
+        .sort({ issuedAt: -1, _id: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+
+      Prescription.countDocuments(filter),
+    ]);
+
+    return res.status(200).json({
+      success: true,
+      total,
+      currentPage: page,
+      totalPages: Math.ceil(total / limit),
+      pageSize: limit,
+      hasNextPage: page * limit < total,
+      hasPreviousPage: page > 1,
+      prescriptions,
+    });
+  } catch (error) {
+    console.error("Get doctor prescriptions error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to retrieve prescription history.",
+    });
+  }
+};
+
+export const getPrescriptionById = async (req, res) => {
+  try {
+    const { prescriptionId } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(prescriptionId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid prescription ID.",
+      });
+    }
+
+    const prescription = await Prescription.findOne({
+      _id: prescriptionId,
+      $or: [{ patient: req.user._id }, { doctor: req.user._id }],
+    })
+      .populate("patient", "name email phone")
+      .populate("doctor", "name")
+      .populate("appointment", "appointmentDate startTime endTime status")
+      .populate("medicalRecord", "recordType title diagnosis recordedAt")
+      .lean();
+
+    if (!prescription) {
+      return res.status(404).json({
+        success: false,
+        message: "Prescription not found.",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      prescription,
+    });
+  } catch (error) {
+    console.error("Get prescription by ID error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to retrieve prescription.",
     });
   }
 };
