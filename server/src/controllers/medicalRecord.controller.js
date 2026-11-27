@@ -54,6 +54,7 @@ export const createMedicalRecord = async (req, res) => {
           "Your medical license must be verified to create medical records.",
       });
     }
+    let linkedAppointmentId = null;
 
     if (appointmentId) {
       const appointment = await Appointment.findOne({
@@ -70,12 +71,28 @@ export const createMedicalRecord = async (req, res) => {
             "A completed appointment belonging to this patient and doctor is required.",
         });
       }
+
+      linkedAppointmentId = appointment._id;
+    } else {
+      const latestAppointment = await Appointment.findOne({
+        patient: patientId,
+        doctor: req.user._id,
+        status: "completed",
+      })
+        .sort({
+          appointmentDate: -1,
+          startTime: -1,
+          _id: -1,
+        })
+        .select("_id");
+
+      linkedAppointmentId = latestAppointment?._id || null;
     }
 
     const medicalRecord = await MedicalRecord.create({
       patient: patientId,
       doctor: req.user._id,
-      appointment: appointmentId || null,
+      appointment: linkedAppointmentId,
       ...recordData,
     });
 
