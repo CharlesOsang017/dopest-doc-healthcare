@@ -276,3 +276,21 @@ export const prescriptionSchema = z
     notes: z.string().trim().max(2000).optional(),
   })
   .strict();
+
+export const addressSchema = z.object({
+  street: z.string().trim().max(200).optional(),
+  city: z.string().trim().max(100).optional(),
+  county: z.string().trim().max(100).optional(),
+  country: z.string().trim().max(100).optional(),
+});
+
+export const createProfileSchema = z.object({
+  laboratoryName: z.string().trim().min(2).max(200),
+  registrationNumber: z.string().trim().min(2).max(100),
+  contactPerson: z.string().trim().min(2).max(150),
+  phone: z.string().trim().min(7).max(30),
+  email: z.string().trim().email().optional().or(z.literal("")),
+  address: addressSchema.optional(),
+  services: z.array(z.string().trim().min(1).max(100)).max(100).optional(),
+  operatingHours: z.string().trim().max(200).optional(),
+});

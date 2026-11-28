@@ -8,6 +8,7 @@ import doctorAvailabilityRoutes from "./routes/doctorAvailability.route.js";
 import appointmentRoutes from "./routes/appointment.route.js";
 import medicalRecordRoutes from "./routes/medicalRecord.route.js";
 import prescriptionRoutes from "./routes/prescription.route.js";
+import laboratoryProfileRoutes from "./routes/laboratoryProfile.route.js";
 
 const app = express();
 
@@ -40,4 +41,6 @@ app.use("/api/v1/appointments", appointmentRoutes);
 app.use("/api/v1/medical-records", medicalRecordRoutes);
 // prescription route
 app.use("/api/v1/prescriptions", prescriptionRoutes);
+// laboratory route
+app.use("/api/v1/laboratory-profiles", laboratoryProfileRoutes);
 export default app;
