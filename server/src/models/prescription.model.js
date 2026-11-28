@@ -93,7 +93,7 @@ const prescriptionSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ["issued", "cancelled"],
+      enum: ["issued", "cancelled", "dispensed"],
       default: "issued",
       index: true,
     },
@@ -115,6 +115,15 @@ const prescriptionSchema = new mongoose.Schema(
     verificationCodeHash: {
       type: String,
       select: false,
+    },
+    dispensedAt: {
+      type: Date,
+      default: null,
+    },
+    dispensedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
     },
   },
   { timestamps: true },

@@ -567,3 +567,104 @@ export const verifyPrescription = async (req, res) => {
     });
   }
 };
+
+export const dispensePrescription = async (req, res) => {
+  try {
+    if (req.user.role !== "chemist") {
+      return res.status(403).json({
+        success: false,
+        message: "Only chemists can dispense prescriptions.",
+      });
+    }
+
+    const schema = z.object({
+      verificationCode: z
+        .string()
+        .trim()
+        .min(1, "Verification code is required."),
+    });
+
+    const validation = schema.safeParse(req.body);
+
+    if (!validation.success) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid verification code.",
+        errors: validation.error.flatten(),
+      });
+    }
+
+    const verificationCodeHash = createHash("sha256")
+      .update(validation.data.verificationCode)
+      .digest("hex");
+
+    // Atomically dispense only prescriptions that are still issued.
+    const prescription = await Prescription.findOneAndUpdate(
+      {
+        verificationCodeHash,
+        status: "issued",
+      },
+      {
+        $set: {
+          status: "dispensed",
+          dispensedAt: new Date(),
+          dispensedBy: req.user._id,
+        },
+      },
+      {
+        new: true,
+        runValidators: true,
+      },
+    )
+      .select("-verificationCodeHash")
+      .populate("patient", "name")
+      .populate("doctor", "name")
+      .populate("dispensedBy", "name")
+      .lean();
+
+    if (!prescription) {
+      const existingPrescription = await Prescription.findOne({
+        verificationCodeHash,
+      }).select("status");
+
+      if (!existingPrescription) {
+        return res.status(404).json({
+          success: false,
+          message: "Prescription not found.",
+        });
+      }
+
+      if (existingPrescription.status === "cancelled") {
+        return res.status(400).json({
+          success: false,
+          message: "Cancelled prescriptions cannot be dispensed.",
+        });
+      }
+
+      if (existingPrescription.status === "dispensed") {
+        return res.status(409).json({
+          success: false,
+          message: "This prescription has already been dispensed.",
+        });
+      }
+
+      return res.status(409).json({
+        success: false,
+        message: "Unable to dispense this prescription.",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Prescription dispensed successfully.",
+      prescription,
+    });
+  } catch (error) {
+    console.error("Dispense prescription error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to dispense prescription.",
+    });
+  }
+};
