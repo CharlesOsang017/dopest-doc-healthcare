@@ -470,7 +470,7 @@ export const downloadPrescriptionPdf = async (req, res) => {
       });
     }
 
-    if (prescription.status !== "issued") {
+    if (!["issued", "dispensed"].includes(prescription.status)) {
       return res.status(400).json({
         success: false,
         message: "Cancelled prescriptions cannot be downloaded.",
@@ -540,11 +540,19 @@ export const verifyPrescription = async (req, res) => {
       });
     }
 
-    if (prescription.status !== "issued") {
+    if (prescription.status === "cancelled") {
       return res.status(200).json({
         success: true,
         valid: false,
         message: "This prescription has been cancelled.",
+      });
+    }
+
+    if (prescription.status === "dispensed") {
+      return res.status(200).json({
+        success: true,
+        valid: false,
+        message: "This prescription has already been dispensed.",
       });
     }
 
