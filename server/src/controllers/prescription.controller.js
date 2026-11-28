@@ -166,7 +166,7 @@ export const getMyPrescriptions = async (req, res) => {
     };
 
     if (req.query.status) {
-      if (!["issued", "cancelled"].includes(req.query.status)) {
+      if (!["issued", "cancelled", "dispensed"].includes(req.query.status)) {
         return res.status(400).json({
           success: false,
           message: "Invalid prescription status.",
@@ -230,7 +230,7 @@ export const getDoctorPrescriptions = async (req, res) => {
     };
 
     if (req.query.status) {
-      if (!["issued", "cancelled"].includes(req.query.status)) {
+      if (!["issued", "cancelled", "dispensed"].includes(req.query.status)) {
         return res.status(400).json({
           success: false,
           message: "Invalid prescription status.",
@@ -418,10 +418,11 @@ export const getPrescriptionStatistics = async (req, res) => {
         ? { doctor: req.user._id }
         : { patient: req.user._id };
 
-    const [total, issued, cancelled] = await Promise.all([
+    const [total, issued, cancelled, dispensed] = await Promise.all([
       Prescription.countDocuments(filter),
       Prescription.countDocuments({ ...filter, status: "issued" }),
       Prescription.countDocuments({ ...filter, status: "cancelled" }),
+      Prescription.countDocuments({ ...filter, status: "dispensed" }),
     ]);
 
     return res.status(200).json({
@@ -430,6 +431,7 @@ export const getPrescriptionStatistics = async (req, res) => {
         total,
         issued,
         cancelled,
+        dispensed,
       },
     });
   } catch (error) {
